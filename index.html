@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0a0a0f">
+  <title>MusicPortal</title>
+
+  <!-- No cache for logged-in users (handled via JS) -->
+  <meta id="cache-meta" http-equiv="cache-control" content="max-age=3600">
+
+  <link rel="stylesheet" href="css/style.css">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <!-- Chart.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+  <!-- jsmediatags for ID3 tag reading -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.7/jsmediatags.min.js"></script>
+
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" async></script>
+
+  <style>
+    /* Inline critical styles for immediate render */
+    body { background: #0a0a0f; }
+    .loading-screen {
+      position: fixed; inset: 0;
+      background: #0a0a0f;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 9999; transition: opacity 0.5s;
+    }
+    .loading-screen.fade { opacity: 0; pointer-events: none; }
+    .loading-logo {
+      font-family: 'Georgia', serif;
+      font-size: 1.8rem;
+      color: #7c6af7;
+      letter-spacing: 0.1em;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Loading Screen -->
+<div class="loading-screen" id="loading-screen">
+  <div class="loading-logo">MusicPortal</div>
+</div>
+
+<!-- Context Menu -->
+<div class="context-menu" id="context-menu"></div>
+
+<!-- Notifications -->
+<div id="notifications"></div>
+
+<!-- Mobile Sidebar Overlay -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeMobileSidebar()"></div>
+
+<!-- ===== MAIN APP ===== -->
+<div id="app">
+
+  <!-- TOP NAV -->
+  <nav id="top-nav">
+    <button class="btn-icon mobile-menu-btn" onclick="toggleMobileSidebar()" aria-label="メニュー">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+
+    <div class="nav-logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      MusicPortal
+    </div>
+
+    <div class="nav-tabs">
+      <button class="nav-tab active" data-page="player" onclick="navigateTo('player')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5,3 19,12 5,21"/></svg>
+        <span>再生</span>
+      </button>
+      <button class="nav-tab" data-page="logs" onclick="navigateTo('logs')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
+        <span>ログ</span>
+      </button>
+      <button class="nav-tab" data-page="edit" onclick="navigateTo('edit')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        <span>編集</span>
+      </button>
+    </div>
+
+    <div class="nav-right">
+      <!-- Google Login -->
+      <button class="btn btn-sm btn-google" id="btn-google-login" onclick="loginGoogle()">
+        <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+        Googleでログイン
+      </button>
+
+      <div class="google-section" id="google-user-section" style="display:none">
+        <div class="user-avatar"><img id="user-avatar-img" src="" alt=""></div>
+        <span class="user-name" id="user-name-text"></span>
+        <button class="btn btn-sm btn-secondary" onclick="logoutGoogle()">ログアウト</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- SIDEBAR / PLAYLIST -->
+  <aside id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-title">プレイリスト</div>
+      <div class="sidebar-controls">
+        <select class="sort-select" id="sort-select" onchange="changeSortMode(this.value)">
+          <optgroup label="名前順">
+            <option value="name-asc">名前 昇順</option>
+            <option value="name-desc">名前 降順</option>
+          </optgroup>
+          <optgroup label="追加順">
+            <option value="added-desc" selected>追加 新しい順</option>
+            <option value="added-asc">追加 古い順</option>
+          </optgroup>
+          <optgroup label="長さ順">
+            <option value="duration-asc">時間 短い順</option>
+            <option value="duration-desc">時間 長い順</option>
+          </optgroup>
+          <optgroup label="投稿日順">
+            <option value="year-desc">年代 新しい順</option>
+            <option value="year-asc">年代 古い順</option>
+          </optgroup>
+          <option value="random">ランダム</option>
+        </select>
+        <button class="btn-icon" onclick="openAddModal()" title="曲を追加">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+        <button class="btn-icon" onclick="clearPlaylist()" title="プレイリストをクリア">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="playlist">
+      <div class="playlist-empty">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        <span>プレイリストは空です</span>
+        <span>音声ファイルを追加してください</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main id="main-content">
+
+    <!-- ===== PLAYER PAGE ===== -->
+    <div id="page-player" class="page active">
+
+      <!-- Hero / Now Playing -->
+      <div class="player-hero">
+        <div class="hero-bg" id="hero-bg"></div>
+        <div class="hero-artwork" id="hero-artwork">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.3"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        </div>
+        <div class="hero-info">
+          <div class="hero-track-title" id="hero-title">曲を選択してください</div>
+          <div class="hero-artist" id="hero-artist"></div>
+          <div class="hero-album" id="hero-album"></div>
+          <div class="hero-tags" id="hero-tags"></div>
+        </div>
+      </div>
+
+      <!-- Waveform -->
+      <div class="player-section">
+        <canvas id="waveform-canvas" height="48"></canvas>
+      </div>
+
+      <!-- Upload Zone -->
+      <div class="upload-zone" id="upload-zone">
+        <input type="file" id="file-input" accept="audio/*" multiple onchange="handleFileInput(event)">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <div class="upload-zone-text">音声ファイルをドロップ</div>
+        <div class="upload-zone-sub">またはクリックして選択 ・ MP3, WAV, OGG, FLAC, M4A など</div>
+        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();document.getElementById('file-input').click()">
+          ファイルを選択
+        </button>
+
+        <!-- Drive upload button (shown when logged in) -->
+        <div id="drive-section" style="display:none;gap:8px;align-items:center;">
+          <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openDrivePicker()">
+            <svg width="16" height="16" viewBox="0 0 24 24"><path d="M12.012 1.751L6.5 11.25h11.024z" fill="#0066DA"/><path d="M6.5 11.25L1 21h11l.5-.751z" fill="#00AC47"/><path d="M18.012 11.25L12.5 21H23l.012-1z" fill="#EA4335"/></svg>
+            Driveから読み込み
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openDriveUploadModal()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Driveにアップロード
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== LOGS PAGE ===== -->
+    <div id="page-logs" class="page">
+      <div class="page-header">
+        <div class="page-title">再生ログ</div>
+      </div>
+
+      <!-- Stats summary -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-value" id="stat-total-time">0秒</div>
+          <div class="stat-label">累計再生時間</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-total-tracks">0</div>
+          <div class="stat-label">再生トラック数</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-total-sessions">0</div>
+          <div class="stat-label">再生セッション</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-avg-session">0秒</div>
+          <div class="stat-label">平均再生時間</div>
+        </div>
+      </div>
+
+      <!-- Period filter -->
+      <div class="filter-row">
+        <span style="font-size:0.75rem;color:var(--text-muted);align-self:center;margin-right:4px;">期間</span>
+        <button class="filter-chip" data-period="hour" onclick="setLogFilter('period', this)">時間</button>
+        <button class="filter-chip" data-period="day" onclick="setLogFilter('period', this)">日</button>
+        <button class="filter-chip active" data-period="month" onclick="setLogFilter('period', this)">月</button>
+        <button class="filter-chip" data-period="year" onclick="setLogFilter('period', this)">年</button>
+
+        <span style="font-size:0.75rem;color:var(--text-muted);align-self:center;margin-left:16px;margin-right:4px;">分類</span>
+        <button class="filter-chip active" data-cat="total" onclick="setLogFilter('cat', this)">総合</button>
+        <button class="filter-chip" data-cat="artist" onclick="setLogFilter('cat', this)">アーティスト</button>
+        <button class="filter-chip" data-cat="tag" onclick="setLogFilter('cat', this)">タグ</button>
+        <button class="filter-chip" data-cat="year" onclick="setLogFilter('cat', this)">年代</button>
+      </div>
+
+      <!-- Charts -->
+      <div class="chart-grid">
+        <div class="chart-card" style="grid-column: 1 / -1;">
+          <div class="chart-card-title">再生時間の推移</div>
+          <div class="chart-wrap" style="height:220px;">
+            <canvas id="chart-overall"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="chart-grid">
+        <div class="chart-card" style="grid-column: 1 / -1;">
+          <div class="chart-card-title" id="breakdown-title">トラック別内訳</div>
+          <div class="chart-wrap" style="height:280px;">
+            <canvas id="chart-breakdown"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== EDIT PAGE ===== -->
+    <div id="page-edit" class="page">
+      <div class="page-header">
+        <div class="page-title">音声ファイル編集</div>
+        <select class="sort-select" style="width:auto;" onchange="selectEditTrack(this.value)" id="edit-track-select">
+          <option value="">-- トラックを選択 --</option>
+        </select>
+      </div>
+
+      <!-- Selected track info bar -->
+      <div class="edit-track-selector" id="edit-track-bar" style="display:none">
+        <div class="edit-thumb" id="edit-selector-thumb"></div>
+        <div class="edit-selector-info">
+          <div style="font-weight:500;" id="edit-selector-title">トラック名</div>
+          <div style="font-size:0.77rem;color:var(--text-muted);" id="edit-selector-artist"></div>
+        </div>
+      </div>
+
+      <div id="edit-content" style="display:none">
+        <div class="edit-grid">
+
+          <!-- Metadata -->
+          <div class="edit-section">
+            <div class="section-label">メタデータ</div>
+            <div class="form-row">
+              <label>タイトル</label>
+              <input type="text" class="form-input" id="edit-title" placeholder="タイトルを入力">
+            </div>
+            <div class="form-row">
+              <label>アーティスト</label>
+              <input type="text" class="form-input" id="edit-artist" placeholder="アーティスト名">
+            </div>
+            <div class="form-row">
+              <label>アルバム</label>
+              <input type="text" class="form-input" id="edit-album" placeholder="アルバム名">
+            </div>
+            <div class="form-row">
+              <label>投稿日（年）</label>
+              <input type="text" class="form-input" id="edit-year" placeholder="例: 2024">
+            </div>
+
+            <!-- Tags -->
+            <div class="section-label" style="margin-top:16px;">タグ</div>
+            <div class="tag-input-row">
+              <input type="text" class="form-input" id="tag-input" placeholder="タグを入力" onkeydown="if(event.key==='Enter'){addEditTag();event.preventDefault()}">
+              <button class="btn btn-secondary btn-sm" onclick="addEditTag()">追加</button>
+            </div>
+            <div class="tags-list" id="edit-tags-list"></div>
+          </div>
+
+          <!-- Artwork -->
+          <div class="edit-section">
+            <div class="section-label">アートワーク</div>
+            <div class="artwork-upload-zone" onclick="document.getElementById('artwork-file-input').click()">
+              <input type="file" id="artwork-file-input" accept="image/*" style="display:none" onchange="handleArtworkInput(event)">
+              <div class="artwork-preview" id="edit-artwork-preview"></div>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg>
+              <span>クリックして画像を変更</span>
+              <span style="font-size:0.7rem;">JPG, PNG, WebP</span>
+            </div>
+
+            <!-- Format conversion -->
+            <div class="section-label" style="margin-top:16px;">変換形式</div>
+            <div class="form-row">
+              <label>出力フォーマット</label>
+              <select class="form-input" id="edit-convert-format">
+                <option value="mp3">MP3</option>
+                <option value="wav">WAV</option>
+                <option value="ogg">OGG</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Trim -->
+          <div class="edit-section" style="grid-column: 1 / -1">
+            <div class="section-label">トリミング</div>
+            <div class="trim-visualizer">
+              <canvas id="trim-canvas" class="trim-waveform"></canvas>
+              <div class="trim-range" id="trim-range-overlay"></div>
+            </div>
+            <div class="trim-handles">
+              <span>開始</span>
+              <input type="number" class="form-input" id="edit-trim-start" min="0" step="0.1" value="0"
+                onchange="updateTrimOverlay(AppState.editingTrack?.duration||0)">
+              <span>秒</span>
+              <span style="margin-left:8px">終了</span>
+              <input type="number" class="form-input" id="edit-trim-end" min="0" step="0.1" value="0"
+                onchange="updateTrimOverlay(AppState.editingTrack?.duration||0)">
+              <span>秒</span>
+            </div>
+          </div>
+
+          <!-- Audio adjustments -->
+          <div class="edit-section">
+            <div class="section-label">音量調整</div>
+            <div class="range-row">
+              <label>
+                <span>音量</span>
+                <span id="edit-volume-val">100%</span>
+              </label>
+              <input type="range" class="range-input" id="edit-volume" min="0" max="200" value="100"
+                oninput="document.getElementById('edit-volume-val').textContent=this.value+'%'">
+            </div>
+          </div>
+
+          <div class="edit-section">
+            <div class="section-label">キー変更</div>
+            <div class="range-row">
+              <label>
+                <span>半音シフト</span>
+                <span id="edit-key-val">0</span>
+              </label>
+              <input type="range" class="range-input" id="edit-key" min="-12" max="12" value="0"
+                oninput="document.getElementById('edit-key-val').textContent=this.value">
+            </div>
+          </div>
+        </div>
+
+        <!-- Action row -->
+        <div class="action-row">
+          <button class="btn btn-primary" onclick="applyEdits(false)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            別トラックとして追加
+          </button>
+          <button class="btn btn-secondary" onclick="applyEdits(true)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20,6 9,17 4,12"/></svg>
+            上書き保存
+          </button>
+          <button class="btn btn-secondary" onclick="downloadProcessed()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            ダウンロード
+          </button>
+          <button class="btn btn-danger" style="margin-left:auto" onclick="removeTrack(AppState.editingTrack?.id);navigateTo('player')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            このトラックを削除
+          </button>
+        </div>
+      </div>
+
+      <div id="edit-empty" style="text-align:center;padding:60px 20px;color:var(--text-muted);">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 16px;display:block;opacity:0.3"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        <div>編集するトラックを選択してください</div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- PLAYER BAR -->
+  <div id="player-bar">
+    <!-- Track info -->
+    <div class="player-track-info">
+      <div class="player-thumb" id="player-thumb">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.3"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      </div>
+      <div class="player-meta">
+        <div class="player-title" id="player-title">— 未選択 —</div>
+        <div class="player-artist" id="player-artist"></div>
+      </div>
+    </div>
+
+    <!-- Center controls -->
+    <div class="player-center">
+      <div class="player-controls">
+        <button class="ctrl-btn" id="btn-shuffle" onclick="toggleShuffle()" title="シャッフル">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16,3 21,3 21,8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21,16 21,21 16,21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+        </button>
+        <button class="ctrl-btn" onclick="playPrev()" title="前へ">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19,20 9,12 19,4"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+        </button>
+        <button class="play-btn" id="play-btn" onclick="togglePlay()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+        </button>
+        <button class="ctrl-btn" onclick="playNext()" title="次へ">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5,4 15,12 5,20"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+        </button>
+        <button class="ctrl-btn" id="btn-repeat" onclick="toggleRepeat()" title="リピート">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17,1 21,5 17,9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7,23 3,19 7,15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        </button>
+      </div>
+      <div class="progress-container">
+        <span class="time-label" id="time-current">0:00</span>
+        <div class="progress-bar" id="progress-bar" onclick="seekTo(event)">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <span class="time-label" id="time-total">0:00</span>
+      </div>
+    </div>
+
+    <!-- Right controls -->
+    <div class="player-right">
+      <div class="volume-container">
+        <button class="ctrl-btn" onclick="toggleMute()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="volume-icon"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+        </button>
+        <input type="range" class="volume-slider" id="volume-slider" min="0" max="100" value="80" oninput="setVolume(this.value)">
+      </div>
+    </div>
+  </div>
+</div><!-- end #app -->
+
+
+<!-- ===== MODALS ===== -->
+
+<!-- Add Track Modal -->
+<div class="modal-overlay" id="add-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">トラックを追加</div>
+      <button class="btn-icon" onclick="closeModal('add-modal')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div class="modal-tabs">
+      <button class="modal-tab active" onclick="switchAddTab('file', this)">ファイル</button>
+      <button class="modal-tab" onclick="switchAddTab('drive', this)" id="tab-drive">Googleドライブ</button>
+    </div>
+
+    <!-- File tab -->
+    <div id="add-tab-file">
+      <div class="upload-zone" style="margin:0 0 16px;" onclick="document.getElementById('modal-file-input').click()">
+        <input type="file" id="modal-file-input" accept="audio/*" multiple onchange="handleModalFileInput(event)">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <div class="upload-zone-text">ファイルをドロップまたはクリックして選択</div>
+      </div>
+
+      <div id="modal-file-preview" style="display:none">
+        <div class="section-label">初期設定（追加前）</div>
+        <div id="modal-meta-fields">
+          <div class="form-row">
+            <label>タイトル</label>
+            <input type="text" class="form-input" id="modal-title" placeholder="自動検出">
+          </div>
+          <div class="form-row">
+            <label>アーティスト</label>
+            <input type="text" class="form-input" id="modal-artist">
+          </div>
+          <div class="form-row">
+            <label>アルバム</label>
+            <input type="text" class="form-input" id="modal-album">
+          </div>
+          <div class="form-row">
+            <label>年</label>
+            <input type="text" class="form-input" id="modal-year" placeholder="例: 2024">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <button class="btn btn-primary" style="flex:1" onclick="confirmAddFiles()">追加</button>
+          <button class="btn btn-secondary" onclick="cancelModalFiles()">キャンセル</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Drive tab -->
+    <div id="add-tab-drive" style="display:none">
+      <div id="drive-login-prompt" style="text-align:center;padding:20px;color:var(--text-muted);">
+        <svg width="36" height="36" viewBox="0 0 24 24" style="margin:0 auto 12px;display:block;opacity:0.5"><path d="M12.012 1.751L6.5 11.25h11.024z" fill="#0066DA"/><path d="M6.5 11.25L1 21h11l.5-.751z" fill="#00AC47"/><path d="M18.012 11.25L12.5 21H23l.012-1z" fill="#EA4335"/></svg>
+        <p style="font-size:0.85rem;margin-bottom:12px;">Google Driveから音声ファイルを読み込むにはログインが必要です</p>
+        <button class="btn btn-google" onclick="loginGoogle()">
+          <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+          Googleでログイン
+        </button>
+      </div>
+      <div id="drive-file-browser" style="display:none">
+        <div class="drive-files" id="drive-files-list"></div>
+        <button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="addSelectedDriveFiles();closeModal('add-modal')">
+          選択した曲を追加
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Drive Picker Modal (from main page) -->
+<div class="modal-overlay" id="drive-picker-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Driveから読み込み</div>
+      <button class="btn-icon" onclick="closeModal('drive-picker-modal')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="drive-files" id="drive-files-list"></div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button class="btn btn-primary" style="flex:1" onclick="addSelectedDriveFiles()">追加</button>
+      <button class="btn btn-secondary" onclick="closeModal('drive-picker-modal')">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- Drive Upload Modal -->
+<div class="modal-overlay" id="drive-upload-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Driveにアップロード</div>
+      <button class="btn-icon" onclick="closeModal('drive-upload-modal')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="upload-zone" onclick="document.getElementById('drive-upload-input').click()" style="margin:0 0 16px;">
+      <input type="file" id="drive-upload-input" accept="audio/*" multiple onchange="handleDriveUploadInput(event)">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <div class="upload-zone-text">Driveにアップロードするファイルを選択</div>
+    </div>
+    <div id="drive-upload-meta" style="display:none">
+      <div class="form-row">
+        <label>タイトル（初期設定）</label>
+        <input type="text" class="form-input" id="du-title">
+      </div>
+      <div class="form-row">
+        <label>アーティスト</label>
+        <input type="text" class="form-input" id="du-artist">
+      </div>
+      <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="confirmDriveUpload()">
+        アップロードして追加
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="js/icons.js"></script>
+<script src="js/state.js"></script>
+<script src="js/drive.js"></script>
+<script src="js/player.js"></script>
+<script src="js/edit-logs.js"></script>
+<script>
+// ===== UI FUNCTIONS =====
+
+function navigateTo(page) {
+  AppState.currentPage = page;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+
+  const pageEl = document.getElementById('page-' + page);
+  if (pageEl) pageEl.classList.add('active');
+
+  const tabEl = document.querySelector(`.nav-tab[data-page="${page}"]`);
+  if (tabEl) tabEl.classList.add('active');
+
+  if (page === 'logs') {
+    renderLogsPage();
+  } else if (page === 'edit') {
+    populateEditTrackSelect();
+    if (AppState.editingTrack) {
+      populateEditForm(AppState.editingTrack);
+    }
+  }
+}
+
+function populateEditTrackSelect() {
+  const sel = document.getElementById('edit-track-select');
+  if (!sel) return;
+  const current = AppState.editingTrack?.id || '';
+  sel.innerHTML = '<option value="">-- トラックを選択 --</option>' +
+    AppState.playlist.map(t =>
+      `<option value="${t.id}" ${t.id === current ? 'selected' : ''}>${escapeHtml(t.title)}</option>`
+    ).join('');
+}
+
+function selectEditTrack(id) {
+  if (!id) {
+    document.getElementById('edit-track-bar').style.display = 'none';
+    document.getElementById('edit-content').style.display = 'none';
+    document.getElementById('edit-empty').style.display = 'block';
+    AppState.editingTrack = null;
+    return;
+  }
+  const track = AppState.playlist.find(t => t.id === id);
+  if (!track) return;
+  AppState.editingTrack = track;
+  document.getElementById('edit-track-bar').style.display = 'flex';
+  document.getElementById('edit-content').style.display = 'block';
+  document.getElementById('edit-empty').style.display = 'none';
+  populateEditForm(track);
+}
+
+function changeSortMode(mode) {
+  AppState.sortMode = mode;
+  renderPlaylist();
+  saveSettings();
+}
+
+async function clearPlaylist() {
+  if (!confirm('プレイリストをすべて削除しますか？')) return;
+  audio.pause();
+  audio.src = '';
+  AppState.playlist = [];
+  AppState.currentIndex = -1;
+  AppState.isPlaying = false;
+  updatePlayButton();
+  await dbClear(STORE_TRACKS);
+  renderPlaylist();
+  notify('プレイリストをクリアしました');
+}
+
+// Modal helpers
+function openModal(id) {
+  document.getElementById(id)?.classList.add('active');
+}
+function closeModal(id) {
+  document.getElementById(id)?.classList.remove('active');
+}
+
+function openAddModal() {
+  openModal('add-modal');
+  updateDriveTabState();
+}
+
+function updateDriveTabState() {
+  const loginPrompt = document.getElementById('drive-login-prompt');
+  const fileBrowser = document.getElementById('drive-file-browser');
+  if (AppState.googleUser) {
+    if (loginPrompt) loginPrompt.style.display = 'none';
+    if (fileBrowser) {
+      fileBrowser.style.display = 'block';
+      listDriveFiles().then(files => {
+        const list = document.getElementById('drive-files-list');
+        if (!list) return;
+        if (!files.length) {
+          list.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:16px;font-size:0.82rem;">音声ファイルが見つかりません</div>';
+          return;
+        }
+        const existingIds = new Set(AppState.playlist.filter(t=>t.driveFileId).map(t=>t.driveFileId));
+        list.innerHTML = files.map(f => `
+          <label class="drive-file-item">
+            <input type="checkbox" value="${f.id}" data-name="${f.name}" ${existingIds.has(f.id)?'disabled checked':''}>
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.name}</span>
+            <span style="font-size:0.7rem;color:var(--text-muted);flex-shrink:0;">${f.size?(f.size/1024/1024).toFixed(1)+'MB':''}</span>
+          </label>
+        `).join('');
+      });
+    }
+  } else {
+    if (loginPrompt) loginPrompt.style.display = 'block';
+    if (fileBrowser) fileBrowser.style.display = 'none';
+  }
+}
+
+function switchAddTab(tab, btn) {
+  document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('add-tab-file').style.display = tab === 'file' ? 'block' : 'none';
+  document.getElementById('add-tab-drive').style.display = tab === 'drive' ? 'block' : 'none';
+  if (tab === 'drive') updateDriveTabState();
+}
+
+// File input handling
+let pendingModalFiles = [];
+
+async function handleModalFileInput(e) {
+  const files = Array.from(e.target.files);
+  if (!files.length) return;
+  pendingModalFiles = files;
+
+  if (files.length === 1) {
+    const meta = await readAudioMetadata(files[0]);
+    document.getElementById('modal-title').value = meta.title;
+    document.getElementById('modal-artist').value = meta.artist;
+    document.getElementById('modal-album').value = meta.album;
+    document.getElementById('modal-year').value = meta.year;
+  }
+  document.getElementById('modal-file-preview').style.display = 'block';
+}
+
+async function confirmAddFiles() {
+  if (!pendingModalFiles.length) return;
+  closeModal('add-modal');
+
+  const extraData = {
+    title: document.getElementById('modal-title')?.value || '',
+    artist: document.getElementById('modal-artist')?.value || '',
+    album: document.getElementById('modal-album')?.value || '',
+    year: document.getElementById('modal-year')?.value || ''
+  };
+
+  // Only apply manual meta if single file
+  if (pendingModalFiles.length === 1 && extraData.title) {
+    await addTracksFromFiles(pendingModalFiles, extraData);
+  } else {
+    await addTracksFromFiles(pendingModalFiles);
+  }
+  pendingModalFiles = [];
+  document.getElementById('modal-file-preview').style.display = 'none';
+}
+
+function cancelModalFiles() {
+  pendingModalFiles = [];
+  document.getElementById('modal-file-preview').style.display = 'none';
+  document.getElementById('modal-file-input').value = '';
+}
+
+// File input from hero upload zone
+async function handleFileInput(e) {
+  const files = Array.from(e.target.files);
+  await addTracksFromFiles(files);
+  e.target.value = '';
+}
+
+// Artwork handling
+async function handleArtworkInput(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const dataUrl = await fileToDataURL(file);
+  const preview = document.getElementById('edit-artwork-preview');
+  if (preview) preview.innerHTML = `<img src="${dataUrl}" alt="" style="width:80px;height:80px;border-radius:8px;object-fit:cover;">`;
+  if (AppState.editingTrack) AppState.editingTrack.artwork = dataUrl;
+}
+
+// Drive upload
+let pendingDriveFiles = [];
+
+async function openDriveUploadModal() {
+  openModal('drive-upload-modal');
+}
+
+async function handleDriveUploadInput(e) {
+  pendingDriveFiles = Array.from(e.target.files);
+  if (pendingDriveFiles.length === 1) {
+    const meta = await readAudioMetadata(pendingDriveFiles[0]);
+    document.getElementById('du-title').value = meta.title;
+    document.getElementById('du-artist').value = meta.artist;
+  }
+  document.getElementById('drive-upload-meta').style.display = 'block';
+}
+
+async function confirmDriveUpload() {
+  if (!pendingDriveFiles.length) return;
+  closeModal('drive-upload-modal');
+
+  for (const file of pendingDriveFiles) {
+    notify(`Driveにアップロード中: ${file.name}`, 'info');
+    const result = await uploadToDrive(file);
+    if (result?.id) {
+      await addTrackFromFile(file, {
+        driveFileId: result.id,
+        title: document.getElementById('du-title')?.value || undefined,
+        artist: document.getElementById('du-artist')?.value || undefined
+      });
+      notify(`「${file.name}」をアップロード・追加しました`, 'success');
+    }
+  }
+  pendingDriveFiles = [];
+  await saveDriveSettings();
+}
+
+// Volume
+let prevVolume = 80;
+let isMuted = false;
+
+function setVolume(val) {
+  audio.volume = val / 100;
+  isMuted = val == 0;
+}
+
+function toggleMute() {
+  const slider = document.getElementById('volume-slider');
+  if (isMuted) {
+    slider.value = prevVolume;
+    setVolume(prevVolume);
+    isMuted = false;
+  } else {
+    prevVolume = slider.value;
+    slider.value = 0;
+    setVolume(0);
+    isMuted = true;
+  }
+}
+
+// Drag & drop on the main upload zone
+function setupMainDropZone() {
+  const zone = document.getElementById('upload-zone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-active'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-active'));
+  zone.addEventListener('drop', async e => {
+    e.preventDefault();
+    zone.classList.remove('drag-active');
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('audio/'));
+    if (files.length) await addTracksFromFiles(files);
+  });
+
+  // Also handle drop anywhere on the page
+  document.body.addEventListener('dragover', e => e.preventDefault());
+  document.body.addEventListener('drop', async e => {
+    if (e.target.closest('#upload-zone, #playlist')) return;
+    e.preventDefault();
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('audio/'));
+    if (files.length) await addTracksFromFiles(files);
+  });
+}
+
+// Mobile sidebar
+function toggleMobileSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('active');
+}
+function closeMobileSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('active');
+}
+
+// Log page filter
+function setLogFilter(type, btn) {
+  document.querySelectorAll(`.filter-chip[data-${type}]`).forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  renderLogsPage();
+
+  // Update breakdown title
+  const titles = { artist: 'アーティスト別内訳', tag: 'タグ別内訳', year: '年代別内訳', total: 'トラック別内訳' };
+  const cat = document.querySelector('.filter-chip.active[data-cat]')?.dataset.cat || 'total';
+  const titleEl = document.getElementById('breakdown-title');
+  if (titleEl) titleEl.textContent = titles[cat] || 'トラック別内訳';
+}
+
+// Close context menu on click outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('#context-menu')) hideContextMenu();
+});
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.classList.remove('active');
+  });
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  switch(e.code) {
+    case 'Space': e.preventDefault(); togglePlay(); break;
+    case 'ArrowRight': audio.currentTime = Math.min(audio.duration, audio.currentTime + 10); break;
+    case 'ArrowLeft': audio.currentTime = Math.max(0, audio.currentTime - 10); break;
+    case 'ArrowUp': {
+      const s = document.getElementById('volume-slider');
+      s.value = Math.min(100, parseInt(s.value) + 5);
+      setVolume(s.value);
+      break;
+    }
+    case 'ArrowDown': {
+      const s = document.getElementById('volume-slider');
+      s.value = Math.max(0, parseInt(s.value) - 5);
+      setVolume(s.value);
+      break;
+    }
+  }
+});
+
+// Cache control for logged-in users
+function updateCacheMeta() {
+  const meta = document.getElementById('cache-meta');
+  if (meta) {
+    meta.content = AppState.googleUser ? 'no-store, no-cache, must-revalidate' : 'max-age=3600';
+  }
+}
+
+// ===== INIT =====
+async function init() {
+  try {
+    AppState.db = await openDB();
+    await loadSettings();
+
+    // Load tracks from IndexedDB
+    const tracks = await dbGetAll(STORE_TRACKS);
+    AppState.playlist = tracks;
+
+    // Apply saved sort
+    const sortSel = document.getElementById('sort-select');
+    if (sortSel) sortSel.value = AppState.sortMode;
+
+    renderPlaylist();
+    setupMainDropZone();
+
+    // Set initial volume
+    const vol = document.getElementById('volume-slider')?.value ?? 80;
+    audio.volume = vol / 100;
+
+    // Init Google Auth after GSI loads
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        initGoogleAuth();
+        updateAuthUI();
+      }, 1000);
+    });
+
+    // Sync media session
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
+      navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
+    }
+
+  } catch(e) {
+    console.error('Init failed:', e);
+    notify('初期化エラーが発生しました', 'error');
+  } finally {
+    // Hide loading screen
+    setTimeout(() => {
+      document.getElementById('loading-screen').classList.add('fade');
+      setTimeout(() => document.getElementById('loading-screen').remove(), 600);
+    }, 400);
+  }
+}
+
+init();
+</script>
+</body>
+</html>
