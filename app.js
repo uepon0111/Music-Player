@@ -1,96 +1,115 @@
-// --- 状態管理 ---
-let playlist = []; // 楽曲リストを保持する配列
-let currentAudioIndex = -1; // 現在再生中のインデックス
+document.addEventListener('DOMContentLoaded', () => {
+    // --- SPA ナビゲーション処理 ---
+    const navLinks = document.querySelectorAll('.nav-links a');
+    const views = document.querySelectorAll('.view');
 
-// --- DOM要素 ---
-const audioPlayer = document.getElementById('main-audio');
-const playlistElement = document.getElementById('playlist');
-const fileInput = document.getElementById('local-upload');
+    navLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetId = link.getAttribute('data-target');
+            
+            // アクティブなリンクを更新
+            navLinks.forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
 
-// --- SPA (画面切り替え) ---
-function switchView(viewId) {
-    // 全てのビューを非表示
-    document.querySelectorAll('.view').forEach(view => {
-        view.classList.remove('active');
-    });
-    // 全てのナビゲーションボタンのactiveを解除
-    document.querySelectorAll('.nav-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-
-    // 指定されたビューを表示
-    document.getElementById(viewId).classList.add('active');
-    document.getElementById(`btn-${viewId}`).classList.add('active');
-}
-
-// --- ローカルファイルのアップロード処理 ---
-fileInput.addEventListener('change', (e) => {
-    const files = Array.from(e.target.files);
-    
-    files.forEach(file => {
-        // オブジェクトURLを作成して再生可能にする
-        const fileUrl = URL.createObjectURL(file);
-        const songData = {
-            id: Date.now() + Math.random().toString(36).substr(2, 9), // 一意のID
-            name: file.name,
-            url: fileUrl,
-            fileObj: file, // 編集機能などのために元のファイルオブジェクトを保持
-            addedAt: new Date().getTime(),
-            duration: 0, // 後でメタデータから取得
-            source: 'local'
-        };
-        playlist.push(songData);
+            // ビューの切り替え
+            views.forEach(view => {
+                view.classList.remove('active');
+                if (view.id === targetId) {
+                    view.classList.add('active');
+                    if(targetId === 'logs-view') renderChart(); // ログ画面表示時にチャート描画
+                }
+            });
+        });
     });
 
-    renderPlaylist();
-    // 入力欄をリセット（同じファイルを再度選択できるように）
-    fileInput.value = '';
-});
+    // --- ドラッグ＆ドロップ処理 ---
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
 
-// --- プレイリストの描画 ---
-function renderPlaylist() {
-    playlistElement.innerHTML = ''; // クリア
+    dropZone.addEventListener('click', () => fileInput.click());
 
-    if (playlist.length === 0) {
-        playlistElement.innerHTML = '<li style="justify-content:center; color:#888;">ファイルがありません</li>';
-        return;
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        
+        if (e.dataTransfer.files.length > 0) {
+            handleFiles(e.dataTransfer.files);
+        }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            handleFiles(e.target.files);
+        }
+    });
+
+    function handleFiles(files) {
+        // ここでファイルを読み込み、IndexedDB(キャッシュ)またはGoogle Driveへ保存する処理を呼び出す
+        // 現在はUIに追加するモックアップ
+        const playlist = document.getElementById('playlist');
+        Array.from(files).forEach(file => {
+            if (file.type.startsWith('audio/')) {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <div class="track-info">
+                        <strong>${file.name}</strong>
+                    </div>
+                    <div class="track-actions">
+                        <button class="btn-icon play-btn"><i class="fa-solid fa-play"></i></button>
+                        <button class="btn-icon delete-btn"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                `;
+                playlist.appendChild(li);
+                
+                // 初回追加時に編集ページへ遷移する機能などのトリガーをここに記述
+            }
+        });
     }
 
-    playlist.forEach((song, index) => {
-        const li = document.createElement('li');
-        
-        // アイコンとファイル名
-        const infoDiv = document.createElement('div');
-        infoDiv.innerHTML = `<i class="fa-solid fa-music"></i> ${song.name}`;
-        
-        // 再生ボタン
-        const playBtn = document.createElement('button');
-        playBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
-        playBtn.onclick = (e) => {
-            e.stopPropagation(); // liのクリックイベント発火を防ぐ
-            playSong(index);
+    // --- Chart.js ログ表示処理 (モック) ---
+    let statsChart = null;
+    function renderChart() {
+        const ctx = document.getElementById('statsChart').getContext('2d');
+        if (statsChart) statsChart.destroy();
+
+        // ダミーデータ
+        const data = {
+            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+            datasets: [{
+                label: 'Playtime (Hours)',
+                data: [1.2, 2.5, 0.8, 3.1, 4.0, 5.5, 2.0],
+                backgroundColor: 'rgba(29, 185, 84, 0.5)',
+                borderColor: 'rgba(29, 185, 84, 1)',
+                borderWidth: 1
+            }]
         };
 
-        li.appendChild(infoDiv);
-        li.appendChild(playBtn);
-        
-        // 行全体をクリックしても再生
-        li.onclick = () => playSong(index);
+        statsChart = new Chart(ctx, {
+            type: 'bar',
+            data: data,
+            options: {
+                responsive: true,
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+    }
 
-        playlistElement.appendChild(li);
+    // --- ソート機能 (モック枠組み) ---
+    document.getElementById('sort-select').addEventListener('change', (e) => {
+        const sortType = e.target.value;
+        console.log(`Sorting playlist by: ${sortType}`);
+        // ここに配列のソートとDOMの再レンダリング処理を記述
     });
-}
-
-// --- 楽曲の再生 ---
-function playSong(index) {
-    if (index < 0 || index >= playlist.length) return;
-    
-    currentAudioIndex = index;
-    const song = playlist[index];
-    
-    audioPlayer.src = song.url;
-    audioPlayer.play();
-}
-
-// 初期化表示
-renderPlaylist();
+});
