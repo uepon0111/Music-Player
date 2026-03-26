@@ -7,9 +7,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js" defer></script>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="https://apis.google.com/js/api.js" defer></script>
-    
     <link rel="stylesheet" href="style.css">
     <script src="app.js" defer></script>
 </head>
@@ -71,9 +68,9 @@
                     <p id="current-artist">-</p>
                 </div>
                 <div class="playback-controls">
-                    <button id="prev-btn" class="btn icon-btn"><i class="fa-solid fa-backward-step"></i></button>
-                    <button id="play-btn" class="btn icon-btn play-btn"><i class="fa-solid fa-play"></i></button>
-                    <button id="next-btn" class="btn icon-btn"><i class="fa-solid fa-forward-step"></i></button>
+                    <button id="prev-btn" class="btn icon-btn" title="前の曲"><i class="fa-solid fa-backward-step"></i></button>
+                    <button id="play-btn" class="btn icon-btn play-btn" title="再生/一時停止"><i class="fa-solid fa-play"></i></button>
+                    <button id="next-btn" class="btn icon-btn" title="次の曲"><i class="fa-solid fa-forward-step"></i></button>
                 </div>
                 <div class="progress-container">
                     <span id="time-current">0:00</span>
@@ -91,6 +88,9 @@
             <header class="view-header">
                 <h2><i class="fa-solid fa-sliders"></i> 音声ファイル情報編集</h2>
                 <div class="editor-top-actions">
+                    <select id="editor-track-select" class="playlist-dropdown">
+                        <option value="">-- ファイルを選択 --</option>
+                    </select>
                     <button id="btn-preview" class="btn"><i class="fa-solid fa-play"></i> プレビュー再生</button>
                     <button id="btn-stop-preview" class="btn"><i class="fa-solid fa-stop"></i> 停止</button>
                 </div>
@@ -171,17 +171,5 @@
             </div>
         </section>
     </main>
-
-    <div id="upload-modal" class="modal hidden">
-        <div class="modal-content">
-            <h3><i class="fa-solid fa-gear"></i> 追加ファイルの設定</h3>
-            <p>※後からエディターで変更可能です</p>
-            <div id="upload-files-list"></div>
-            <div class="modal-actions">
-                <button id="btn-upload-cancel" class="btn">キャンセル</button>
-                <button id="btn-upload-confirm" class="btn primary">リストに追加</button>
-            </div>
-        </div>
-    </div>
 </body>
 </html>
