@@ -589,3 +589,187 @@ async function updateCharts() {
 document.addEventListener('DOMContentLoaded', () => {
     initCharts();
 });
+
+// ==========================================
+// 9. エディター画面の制御と音声処理
+// ==========================================
+let editingTrackId = null;
+
+// リストの編集ボタンが押されたときの処理
+document.getElementById('playlist').addEventListener('click', (e) => {
+    const editBtn = e.target.closest('.edit-track-btn');
+    if (editBtn) {
+        const trackId = editBtn.getAttribute('data-id');
+        loadTrackIntoEditor(trackId);
+        
+        // エディター画面へ遷移
+        document.querySelectorAll('.nav-links li').forEach(n => n.classList.remove('active'));
+        document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
+        document.querySelector('[data-target="editor-view"]').classList.add('active');
+        document.getElementById('editor-view').classList.add('active');
+    }
+});
+
+function loadTrackIntoEditor(trackId) {
+    const track = AppState.playlist.find(t => t.id === trackId);
+    if (!track) return;
+    
+    editingTrackId = trackId;
+    
+    document.getElementById('edit-title').value = track.title;
+    document.getElementById('edit-artist').value = track.artist;
+    document.getElementById('edit-date').value = track.date || '';
+    document.getElementById('edit-tags').value = track.tags ? track.tags.join(', ') : '';
+    document.getElementById('edit-thumb-preview').src = track.coverUrl;
+    
+    // 高度な編集のリセット
+    document.getElementById('edit-trim-start').value = '';
+    document.getElementById('edit-trim-end').value = '';
+    document.getElementById('edit-volume').value = 100;
+    document.getElementById('edit-key').value = 0;
+    document.getElementById('edit-format').value = 'original';
+}
+
+// 編集の保存処理
+document.getElementById('btn-save-overwrite').addEventListener('click', () => applyEdits(false));
+document.getElementById('btn-save-new').addEventListener('click', () => applyEdits(true));
+document.getElementById('btn-download-edited').addEventListener('click', downloadEditedAudio);
+
+async function applyEdits(isNew) {
+    if (!editingTrackId) return alert('編集するトラックが選択されていません。');
+    
+    const trackIndex = AppState.playlist.findIndex(t => t.id === editingTrackId);
+    let track = AppState.playlist[trackIndex];
+    
+    // メタデータの更新
+    const newTags = document.getElementById('edit-tags').value.split(',').map(s => s.trim()).filter(s => s);
+    
+    const updatedMeta = {
+        ...track,
+        title: document.getElementById('edit-title').value,
+        artist: document.getElementById('edit-artist').value,
+        date: document.getElementById('edit-date').value,
+        tags: newTags
+    };
+
+    if (isNew) {
+        updatedMeta.id = crypto.randomUUID();
+        updatedMeta.title += " (Copy)";
+        updatedMeta.addedAt = Date.now();
+    }
+
+    // DBへの保存
+    const transaction = db.transaction(['audioFiles', 'metadata'], 'readwrite');
+    const audioStore = transaction.objectStore('audioFiles');
+    const metaStore = transaction.objectStore('metadata');
+    
+    // 音声ファイルのコピー（今回は高度な変換をせずにメタデータのみ新しくする挙動）
+    const getRequest = audioStore.get(editingTrackId);
+    getRequest.onsuccess = () => {
+        const fileData = getRequest.result;
+        if (isNew) {
+            audioStore.put({ id: updatedMeta.id, file: fileData.file });
+            metaStore.put(updatedMeta);
+            AppState.playlist.push(updatedMeta);
+        } else {
+            metaStore.put(updatedMeta);
+            AppState.playlist[trackIndex] = updatedMeta;
+        }
+        renderPlaylist();
+        alert('保存が完了しました。');
+    };
+}
+
+// Web Audio API を用いた音声加工とダウンロード
+async function downloadEditedAudio() {
+    if (!editingTrackId) return;
+    
+    const trimStart = parseFloat(document.getElementById('edit-trim-start').value) || 0;
+    const trimEnd = parseFloat(document.getElementById('edit-trim-end').value) || 0;
+    const volume = parseFloat(document.getElementById('edit-volume').value) || 100;
+    const keyChange = parseFloat(document.getElementById('edit-key').value) || 0;
+    
+    // DBから元ファイルを取得
+    const transaction = db.transaction(['audioFiles'], 'readonly');
+    const request = transaction.objectStore('audioFiles').get(editingTrackId);
+    
+    request.onsuccess = async () => {
+        const file = request.result.file;
+        const arrayBuffer = await file.arrayBuffer();
+        
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        
+        // オフラインレンダリングの設定
+        const startOffset = Math.max(0, trimStart);
+        const endOffset = trimEnd > startOffset ? Math.min(audioBuffer.duration, trimEnd) : audioBuffer.duration;
+        const duration = endOffset - startOffset;
+        
+        if (duration <= 0) return alert('トリミングの範囲が不正です。');
+        
+        const offlineCtx = new OfflineAudioContext(audioBuffer.numberOfChannels, audioCtx.sampleRate * duration, audioCtx.sampleRate);
+        const source = offlineCtx.createBufferSource();
+        source.buffer = audioBuffer;
+        
+        // キー変更 (半角音1つ = 100セント)
+        source.detune.value = keyChange * 100;
+        
+        // 音量調整
+        const gainNode = offlineCtx.createGain();
+        gainNode.gain.value = volume / 100;
+        
+        source.connect(gainNode);
+        gainNode.connect(offlineCtx.destination);
+        source.start(0, startOffset, duration);
+        
+        const renderedBuffer = await offlineCtx.startRendering();
+        
+        // WAV形式に変換してダウンロード
+        const wavBlob = audioBufferToWav(renderedBuffer);
+        const url = URL.createObjectURL(wavBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        const title = document.getElementById('edit-title').value || 'edited_audio';
+        a.download = `${title}.wav`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+}
+
+// AudioBufferをWAV Blobに変換するヘルパー関数
+function audioBufferToWav(buffer) {
+    const numOfChan = buffer.numberOfChannels;
+    const length = buffer.length * numOfChan * 2 + 44;
+    const bufferArray = new ArrayBuffer(length);
+    const view = new DataView(bufferArray);
+    const channels = [];
+    let offset = 0;
+    let pos = 0;
+
+    // WAVヘッダー書き込み
+    const setUint16 = (data) => { view.setUint16(pos, data, true); pos += 2; };
+    const setUint32 = (data) => { view.setUint32(pos, data, true); pos += 4; };
+    
+    view.setUint32(pos, 1179011410, false); pos += 4; // "RIFF"
+    setUint32(length - 8); 
+    view.setUint32(pos, 1163280727, false); pos += 4; // "WAVE"
+    view.setUint32(pos, 1718449184, false); pos += 4; // "fmt "
+    setUint32(16); setUint16(1); setUint16(numOfChan);
+    setUint32(buffer.sampleRate);
+    setUint32(buffer.sampleRate * 2 * numOfChan);
+    setUint16(numOfChan * 2); setUint16(16);
+    view.setUint32(pos, 1684108385, false); pos += 4; // "data"
+    setUint32(length - pos - 4);
+
+    // データ書き込み
+    for (let i = 0; i < buffer.numberOfChannels; i++) channels.push(buffer.getChannelData(i));
+    while (offset < buffer.length) {
+        for (let i = 0; i < numOfChan; i++) {
+            let sample = Math.max(-1, Math.min(1, channels[i][offset]));
+            sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0;
+            view.setInt16(pos, sample, true); pos += 2;
+        }
+        offset++;
+    }
+    return new Blob([bufferArray], { type: "audio/wav" });
+}
