@@ -1,345 +1,182 @@
 // ==========================================
-// 1. グローバル状態と定数
+// 1. グローバル状態・定数
 // ==========================================
 const AppState = {
-    playlist: [],          // 再生リスト
-    currentTrackIndex: -1, // 現在再生中の曲のインデックス
-    isPlaying: false,      // 再生状態
-    isGoogleLoggedIn: false, // Googleログイン状態
-    driveFolderId: null    // 専用のGoogle DriveフォルダID
+    playlists: [],         // 複数のプレイリスト
+    currentPlaylistId: 'default',
+    tracks: [],            // 現在のプレイリストの曲
+    currentTrackIndex: -1,
+    isPlaying: false,
+    isGoogleLoggedIn: false,
+    editingTrackId: null   // エディターで選択中の曲ID
 };
 
-// Google API設定 (※ご自身の取得したものに書き換えてください)
-const GOOGLE_CLIENT_ID = '966636096862-8hrrm5heb4g5r469veoels7u6ifjguuk.apps.googleusercontent.com';
-const GOOGLE_API_KEY = '966636096862-8hrrm5heb4g5r469veoels7u6ifjguuk.apps.googleusercontent.com';
-const DISCOVERY_DOCS = ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'];
-const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+const GOOGLE_CLIENT_ID = 'YOUR_CLIENT_ID.apps.googleusercontent.com';
+const GOOGLE_API_KEY = 'YOUR_API_KEY';
 
 // ==========================================
-// 2. IndexedDB (ローカルキャッシュ) の設定
+// 2. IndexedDB (ローカルキャッシュ) 
 // ==========================================
 let db;
-const DB_NAME = 'CloudAudioPlayerDB';
-const DB_VERSION = 1;
-
 function initIndexedDB() {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-        request.onupgradeneeded = (event) => {
-            const database = event.target.result;
-            // 音声ファイル本体を保存するストア
-            if (!database.objectStoreNames.contains('audioFiles')) {
-                database.createObjectStore('audioFiles', { keyPath: 'id' });
-            }
-            // メタデータや統計ログを保存するストア
+        const request = indexedDB.open('CloudAudioAppDB', 2);
+        request.onupgradeneeded = (e) => {
+            const database = e.target.result;
+            if (!database.objectStoreNames.contains('audioFiles')) database.createObjectStore('audioFiles', { keyPath: 'id' });
             if (!database.objectStoreNames.contains('metadata')) {
                 const metaStore = database.createObjectStore('metadata', { keyPath: 'id' });
-                metaStore.createIndex('addedAt', 'addedAt', { unique: false });
+                metaStore.createIndex('playlistId', 'playlistId', { unique: false });
             }
-            if (!database.objectStoreNames.contains('logs')) {
-                const logStore = database.createObjectStore('logs', { keyPath: 'id', autoIncrement: true });
-                logStore.createIndex('date', 'date', { unique: false });
-            }
+            if (!database.objectStoreNames.contains('playlists')) database.createObjectStore('playlists', { keyPath: 'id' });
+            if (!database.objectStoreNames.contains('logs')) database.createObjectStore('logs', { keyPath: 'id', autoIncrement: true });
         };
-
-        request.onsuccess = (event) => {
-            db = event.target.result;
-            console.log('<i class="fa-solid fa-database"></i> IndexedDB initialized.');
+        request.onsuccess = async (e) => {
+            db = e.target.result;
+            await loadPlaylists();
             resolve();
         };
+        request.onerror = (e) => reject(e.target.error);
+    });
+}
 
-        request.onerror = (event) => {
-            console.error('IndexedDB error:', event.target.error);
-            reject(event.target.error);
+// ==========================================
+// 3. プレイリスト管理
+// ==========================================
+async function loadPlaylists() {
+    return new Promise((resolve) => {
+        const tx = db.transaction('playlists', 'readonly');
+        const store = tx.objectStore('playlists');
+        const req = store.getAll();
+        req.onsuccess = () => {
+            let lists = req.result;
+            if (lists.length === 0) {
+                const defaultList = { id: 'default', name: 'デフォルトリスト' };
+                db.transaction('playlists', 'readwrite').objectStore('playlists').put(defaultList);
+                lists = [defaultList];
+            }
+            AppState.playlists = lists;
+            updatePlaylistDropdown();
+            loadTracks(AppState.currentPlaylistId);
+            resolve();
         };
     });
 }
 
-// ==========================================
-// 3. Google Drive API 連携
-// ==========================================
-let tokenClient;
-let gapiInited = false;
-let gisInited = false;
-
-// index.htmlで読み込まれたgapiの初期化
-function gapiLoaded() {
-    gapi.load('client', initializeGapiClient);
-}
-
-async function initializeGapiClient() {
-    try {
-        await gapi.client.init({
-            apiKey: GOOGLE_API_KEY,
-            discoveryDocs: DISCOVERY_DOCS,
-        });
-        gapiInited = true;
-        checkAuthSetup();
-    } catch (err) {
-        console.error('Error initializing GAPI client', err);
-    }
-}
-
-// index.htmlで読み込まれたGoogle Identity Servicesの初期化
-function gisLoaded() {
-    tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: GOOGLE_CLIENT_ID,
-        scope: SCOPES,
-        callback: '', // 認証後に動的に設定
+function updatePlaylistDropdown() {
+    const select = document.getElementById('playlist-select');
+    select.innerHTML = '';
+    AppState.playlists.forEach(pl => {
+        const opt = document.createElement('option');
+        opt.value = pl.id;
+        opt.textContent = pl.name;
+        if(pl.id === AppState.currentPlaylistId) opt.selected = true;
+        select.appendChild(opt);
     });
-    gisInited = true;
-    checkAuthSetup();
 }
 
-function checkAuthSetup() {
-    if (gapiInited && gisInited) {
-        const authBtn = document.getElementById('auth-btn');
-        authBtn.addEventListener('click', handleAuthClick);
-    }
-}
-
-function handleAuthClick() {
-    tokenClient.callback = async (resp) => {
-        if (resp.error !== undefined) {
-            throw (resp);
-        }
-        AppState.isGoogleLoggedIn = true;
-        updateAuthUI(true);
-        await ensureDriveFolder();
-        await loadDriveFiles();
-    };
-
-    if (gapi.client.getToken() === null) {
-        tokenClient.requestAccessToken({prompt: 'consent'});
-    } else {
-        tokenClient.requestAccessToken({prompt: ''});
-    }
-}
-
-function updateAuthUI(isLoggedIn) {
-    const statusText = document.getElementById('auth-status');
-    const authBtn = document.getElementById('auth-btn');
-    if (isLoggedIn) {
-        statusText.className = 'status-text text-online';
-        statusText.innerHTML = '<i class="fa-solid fa-cloud"></i> ドライブ同期中';
-        authBtn.innerHTML = '<i class="fa-solid fa-right-from-bracket"></i> <span>ログアウト</span>';
-        authBtn.onclick = handleSignoutClick;
-    } else {
-        statusText.className = 'status-text text-offline';
-        statusText.innerHTML = '<i class="fa-solid fa-cloud-arrow-down"></i> ローカルモード';
-        authBtn.innerHTML = '<i class="fa-brands fa-google"></i> <span>ログイン</span>';
-        authBtn.onclick = handleAuthClick;
-    }
-}
-
-function handleSignoutClick() {
-    const token = gapi.client.getToken();
-    if (token !== null) {
-        google.accounts.oauth2.revoke(token.access_token, () => {
-            gapi.client.setToken('');
-            AppState.isGoogleLoggedIn = false;
-            AppState.driveFolderId = null;
-            updateAuthUI(false);
-            // ローカルモードへの切り替え処理（キャッシュ読み込み等）をここに記述
-        });
-    }
-}
-
-// Drive内に専用フォルダ「AudioApp_Data」があるか確認し、なければ作成する
-async function ensureDriveFolder() {
-    const folderName = 'AudioApp_Data';
-    try {
-        const response = await gapi.client.drive.files.list({
-            q: `mimeType='application/vnd.google-apps.folder' and name='${folderName}' and trashed=false`,
-            fields: 'files(id, name)',
-            spaces: 'drive'
-        });
-        
-        const files = response.result.files;
-        if (files && files.length > 0) {
-            AppState.driveFolderId = files[0].id;
-        } else {
-            const folderMetadata = {
-                'name': folderName,
-                'mimeType': 'application/vnd.google-apps.folder'
-            };
-            const createResponse = await gapi.client.drive.files.create({
-                resource: folderMetadata,
-                fields: 'id'
-            });
-            AppState.driveFolderId = createResponse.result.id;
-        }
-    } catch (err) {
-        console.error('Error ensuring Drive folder:', err);
-    }
-}
-
-// ==========================================
-// 4. UI 制御 (タブ切り替え・ドラッグ＆ドロップ)
-// ==========================================
-document.addEventListener('DOMContentLoaded', () => {
-    initIndexedDB();
-    
-    // タブ（ビュー）の切り替え
-    const navLinks = document.querySelectorAll('.nav-links li');
-    const views = document.querySelectorAll('.view-section');
-
-    navLinks.forEach(link => {
-        link.addEventListener('click', () => {
-            navLinks.forEach(n => n.classList.remove('active'));
-            views.forEach(v => v.classList.remove('active'));
-            
-            link.classList.add('active');
-            const targetId = link.getAttribute('data-target');
-            document.getElementById(targetId).classList.add('active');
-        });
-    });
-
-    // ドラッグ＆ドロップの設定
-    const dropZone = document.getElementById('drop-zone');
-    const dropOverlay = document.getElementById('drop-overlay');
-
-    dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropOverlay.classList.add('drag-over');
-    });
-
-    dropZone.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        dropOverlay.classList.remove('drag-over');
-    });
-
-    dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropOverlay.classList.remove('drag-over');
-        if (e.dataTransfer.files.length > 0) {
-            handleFilesSelected(e.dataTransfer.files);
-        }
-    });
-
-    // ファイル追加ボタンの設定
-    const fileInput = document.getElementById('file-input');
-    const addFileBtn = document.getElementById('add-file-btn');
-    
-    addFileBtn.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) {
-            handleFilesSelected(e.target.files);
-        }
-    });
+document.getElementById('playlist-select').addEventListener('change', (e) => {
+    AppState.currentPlaylistId = e.target.value;
+    loadTracks(AppState.currentPlaylistId);
 });
 
-// ファイル選択時の処理（次回詳細実装）
-function handleFilesSelected(files) {
-    const modal = document.getElementById('upload-modal');
-    const list = document.getElementById('upload-files-list');
-    list.innerHTML = ''; // リスト初期化
-    
-    Array.from(files).forEach(file => {
-        if(file.type.startsWith('audio/')) {
-            const item = document.createElement('div');
-            item.textContent = file.name;
-            list.appendChild(item);
-        }
-    });
-    
-    modal.classList.remove('hidden');
-    
-    document.getElementById('btn-upload-cancel').onclick = () => {
-        modal.classList.add('hidden');
-        document.getElementById('file-input').value = '';
-    };
-    
-    document.getElementById('btn-upload-confirm').onclick = () => {
-        // 次回実装：ファイルのパースとメタデータ取得、DB保存、Google Driveアップロード
-        modal.classList.add('hidden');
-        processAndAddFiles(files); 
+document.getElementById('new-playlist-btn').addEventListener('click', () => {
+    const name = prompt('新しい再生リストの名前を入力:');
+    if (name) {
+        const newId = 'pl_' + Date.now();
+        const pl = { id: newId, name: name };
+        db.transaction('playlists', 'readwrite').objectStore('playlists').put(pl);
+        AppState.playlists.push(pl);
+        AppState.currentPlaylistId = newId;
+        updatePlaylistDropdown();
+        loadTracks(newId);
+    }
+});
+
+document.getElementById('delete-playlist-btn').addEventListener('click', () => {
+    if (AppState.playlists.length <= 1) return alert('最後のリストは削除できません');
+    if (confirm('現在のリストを削除しますか？(曲も削除されます)')) {
+        db.transaction('playlists', 'readwrite').objectStore('playlists').delete(AppState.currentPlaylistId);
+        AppState.playlists = AppState.playlists.filter(p => p.id !== AppState.currentPlaylistId);
+        AppState.currentPlaylistId = AppState.playlists[0].id;
+        updatePlaylistDropdown();
+        loadTracks(AppState.currentPlaylistId);
+    }
+});
+
+// ==========================================
+// 4. トラック読み込み・表示
+// ==========================================
+function loadTracks(playlistId) {
+    const tx = db.transaction('metadata', 'readonly');
+    const index = tx.objectStore('metadata').index('playlistId');
+    const req = index.getAll(playlistId);
+    req.onsuccess = () => {
+        AppState.tracks = req.result;
+        renderPlaylist();
     };
 }
-// ==========================================
-// 5. ファイル処理とメタデータ抽出 (jsmediatags使用)
-// ==========================================
+
 async function processAndAddFiles(files) {
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
         if (!file.type.startsWith('audio/')) continue;
-
-        // jsmediatagsを使用してID3タグを読み込む
+        
         jsmediatags.read(file, {
-            onSuccess: async function(tag) {
-                const tags = tag.tags;
-                const trackData = createTrackData(file, tags);
-                await saveTrack(trackData);
-            },
-            onError: async function(error) {
-                console.warn('Metadata not found for', file.name);
-                const trackData = createTrackData(file, {});
-                await saveTrack(trackData);
-            }
+            onSuccess: async (tag) => await saveTrack(createTrackData(file, tag.tags)),
+            onError: async () => await saveTrack(createTrackData(file, {}))
         });
     }
 }
 
 function createTrackData(file, tags) {
-    const trackData = {
-        id: crypto.randomUUID(), // 一意のIDを生成
-        file: file, // 実際のファイルオブジェクト
+    let coverUrl = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="%23ccc"/></svg>';
+    if (tags.picture) {
+        let base64String = "";
+        for (let j = 0; j < tags.picture.data.length; j++) base64String += String.fromCharCode(tags.picture.data[j]);
+        coverUrl = `data:${tags.picture.format};base64,${window.btoa(base64String)}`;
+    }
+    return {
+        id: crypto.randomUUID(),
+        file: file,
+        playlistId: AppState.currentPlaylistId,
         title: tags.title || file.name.replace(/\.[^/.]+$/, ""),
         artist: tags.artist || 'Unknown Artist',
-        duration: 0, // 読み込み時に更新
+        duration: 0,
         addedAt: Date.now(),
-        date: tags.year || 'Unknown',
-        tags: [], 
-        coverUrl: 'default-cover.jpg'
+        date: tags.year || '',
+        tags: '',
+        coverUrl: coverUrl,
+        trimStart: 0,
+        trimEnd: 0,
+        volume: 100,
+        key: 0
     };
-
-    // サムネイル画像のパース
-    if (tags.picture) {
-        const { data, format } = tags.picture;
-        let base64String = "";
-        for (let j = 0; j < data.length; j++) {
-            base64String += String.fromCharCode(data[j]);
-        }
-        trackData.coverUrl = `data:${format};base64,${window.btoa(base64String)}`;
-    }
-    return trackData;
 }
 
 async function saveTrack(trackData) {
-    // IndexedDBに保存
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction(['audioFiles', 'metadata'], 'readwrite');
-        const audioStore = transaction.objectStore('audioFiles');
-        const metaStore = transaction.objectStore('metadata');
-
-        audioStore.put({ id: trackData.id, file: trackData.file });
-        
-        // ファイル本体を除外してメタデータのみ保存
+    return new Promise((resolve) => {
+        const tx = db.transaction(['audioFiles', 'metadata'], 'readwrite');
+        tx.objectStore('audioFiles').put({ id: trackData.id, file: trackData.file });
         const { file, ...meta } = trackData;
-        metaStore.put(meta);
-
-        transaction.oncomplete = () => {
-            AppState.playlist.push(meta);
-            renderPlaylist();
+        tx.objectStore('metadata').put(meta);
+        tx.oncomplete = () => {
+            if(meta.playlistId === AppState.currentPlaylistId) {
+                AppState.tracks.push(meta);
+                renderPlaylist();
+            }
             resolve();
         };
-        transaction.onerror = (e) => reject(e.target.error);
     });
 }
 
-// ==========================================
-// 6. 再生リストの描画と並べ替え
-// ==========================================
 function renderPlaylist() {
     const playlistEl = document.getElementById('playlist');
     playlistEl.innerHTML = '';
-
-    AppState.playlist.forEach((track, index) => {
+    AppState.tracks.forEach((track, index) => {
         const li = document.createElement('li');
         li.className = 'playlist-item';
         if (index === AppState.currentTrackIndex) li.style.backgroundColor = 'var(--hover-color)';
-        
         li.innerHTML = `
             <i class="fa-solid fa-music text-secondary"></i>
             <div class="info">
@@ -355,421 +192,242 @@ function renderPlaylist() {
         playlistEl.appendChild(li);
     });
 
-    attachPlaylistEvents();
-    updateCharts(); // リスト更新時にグラフも更新
+    document.querySelectorAll('.play-track-btn').forEach(btn => btn.onclick = (e) => playTrack(parseInt(e.currentTarget.dataset.index)));
+    document.querySelectorAll('.delete-track-btn').forEach(btn => btn.onclick = (e) => deleteTrack(e.currentTarget.dataset.id));
+    document.querySelectorAll('.edit-track-btn').forEach(btn => btn.onclick = (e) => openEditor(e.currentTarget.dataset.id));
 }
 
-function attachPlaylistEvents() {
-    document.querySelectorAll('.play-track-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const index = parseInt(e.currentTarget.getAttribute('data-index'));
-            playTrack(index);
-        });
-    });
-
-    document.querySelectorAll('.delete-track-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            const id = e.currentTarget.getAttribute('data-id');
-            await deleteTrack(id);
-        });
-    });
-
-    // エディターへの遷移は第4回で実装
-}
-
-// 並べ替えロジック
-document.getElementById('sort-select').addEventListener('change', (e) => {
-    const [key, order] = e.target.value.split('_');
-    AppState.playlist.sort((a, b) => {
-        let valA = a[key === 'name' ? 'title' : key];
-        let valB = b[key === 'name' ? 'title' : key];
-        
-        if (valA < valB) return order === 'asc' ? -1 : 1;
-        if (valA > valB) return order === 'asc' ? 1 : -1;
-        return 0;
-    });
-    renderPlaylist();
-});
-
-document.getElementById('shuffle-btn').addEventListener('click', () => {
-    for (let i = AppState.playlist.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [AppState.playlist[i], AppState.playlist[j]] = [AppState.playlist[j], AppState.playlist[i]];
-    }
-    renderPlaylist();
-});
-
-async function deleteTrack(id) {
-    // キャッシュからの削除
-    const transaction = db.transaction(['audioFiles', 'metadata'], 'readwrite');
-    transaction.objectStore('audioFiles').delete(id);
-    transaction.objectStore('metadata').delete(id);
-    
-    transaction.oncomplete = () => {
-        AppState.playlist = AppState.playlist.filter(t => t.id !== id);
+function deleteTrack(id) {
+    const tx = db.transaction(['audioFiles', 'metadata'], 'readwrite');
+    tx.objectStore('audioFiles').delete(id);
+    tx.objectStore('metadata').delete(id);
+    tx.oncomplete = () => {
+        AppState.tracks = AppState.tracks.filter(t => t.id !== id);
         renderPlaylist();
     };
-    
-    // Google Driveから削除（ログイン時）
-    if (AppState.isGoogleLoggedIn) {
-        // ※ドライブ上のファイルIDがマッピングされている前提。実装の簡略化のためここでは省略します。
-        console.log("Deleted from local cache.");
-    }
 }
 
 // ==========================================
-// 7. オーディオプレイヤー制御
+// 5. プレイヤー制御
 // ==========================================
 const audioPlayer = new Audio();
 const playBtn = document.getElementById('play-btn');
-const seekBar = document.getElementById('seek-bar');
-const volumeBar = document.getElementById('volume-bar');
-let playbackLogTimer = null; // ログ記録用タイマー
 
 audioPlayer.addEventListener('timeupdate', () => {
     if (!isNaN(audioPlayer.duration)) {
-        seekBar.value = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+        document.getElementById('seek-bar').value = (audioPlayer.currentTime / audioPlayer.duration) * 100;
         document.getElementById('time-current').textContent = formatTime(audioPlayer.currentTime);
     }
 });
-
 audioPlayer.addEventListener('loadedmetadata', () => {
     document.getElementById('time-total').textContent = formatTime(audioPlayer.duration);
-    // 初回ロード時にDBのdurationを更新
-    if (AppState.playlist[AppState.currentTrackIndex].duration === 0) {
-        AppState.playlist[AppState.currentTrackIndex].duration = audioPlayer.duration;
-        saveTrack(AppState.playlist[AppState.currentTrackIndex]); // DB更新
-    }
 });
+audioPlayer.addEventListener('ended', playNextTrack);
 
-audioPlayer.addEventListener('ended', () => {
-    playNextTrack();
-});
-
-async function playTrack(index) {
-    if (index < 0 || index >= AppState.playlist.length) return;
-    
+function playTrack(index) {
+    if (index < 0 || index >= AppState.tracks.length) return;
     AppState.currentTrackIndex = index;
-    const trackMeta = AppState.playlist[index];
+    const trackMeta = AppState.tracks[index];
     
-    // DBから音声ファイル本体を取得
-    const transaction = db.transaction(['audioFiles'], 'readonly');
-    const store = transaction.objectStore('audioFiles');
-    const request = store.get(trackMeta.id);
-    
-    request.onsuccess = () => {
-        if (request.result && request.result.file) {
-            const fileUrl = URL.createObjectURL(request.result.file);
-            audioPlayer.src = fileUrl;
+    db.transaction('audioFiles', 'readonly').objectStore('audioFiles').get(trackMeta.id).onsuccess = (e) => {
+        if (e.target.result) {
+            audioPlayer.src = URL.createObjectURL(e.target.result.file);
+            audioPlayer.currentTime = trackMeta.trimStart || 0;
+            audioPlayer.volume = (trackMeta.volume || 100) / 100;
             audioPlayer.play();
             AppState.isPlaying = true;
             updatePlayerUI(trackMeta);
-            startPlaybackLogging(trackMeta);
         }
     };
 }
-
+function playNextTrack() { playTrack((AppState.currentTrackIndex + 1) % AppState.tracks.length); }
+function playPrevTrack() { playTrack((AppState.currentTrackIndex - 1 + AppState.tracks.length) % AppState.tracks.length); }
 function togglePlay() {
     if (audioPlayer.src) {
-        if (audioPlayer.paused) {
-            audioPlayer.play();
-            AppState.isPlaying = true;
-        } else {
-            audioPlayer.pause();
-            AppState.isPlaying = false;
-        }
+        audioPlayer.paused ? audioPlayer.play() : audioPlayer.pause();
+        AppState.isPlaying = !audioPlayer.paused;
         updatePlayButton();
     }
 }
-
-function playNextTrack() {
-    let nextIndex = AppState.currentTrackIndex + 1;
-    if (nextIndex >= AppState.playlist.length) nextIndex = 0; // ループ
-    playTrack(nextIndex);
-}
-
-function playPrevTrack() {
-    let prevIndex = AppState.currentTrackIndex - 1;
-    if (prevIndex < 0) prevIndex = AppState.playlist.length - 1;
-    playTrack(prevIndex);
-}
-
 function updatePlayerUI(track) {
     document.getElementById('current-title').textContent = track.title;
     document.getElementById('current-artist').textContent = track.artist;
     document.getElementById('current-thumb').src = track.coverUrl;
     updatePlayButton();
-    renderPlaylist(); // リストのハイライト更新
+    renderPlaylist();
 }
+function updatePlayButton() { playBtn.innerHTML = AppState.isPlaying ? '<i class="fa-solid fa-pause"></i>' : '<i class="fa-solid fa-play"></i>'; }
+function formatTime(sec) { return `${Math.floor(sec/60)}:${Math.floor(sec%60).toString().padStart(2,'0')}`; }
 
-function updatePlayButton() {
-    playBtn.innerHTML = AppState.isPlaying ? '<i class="fa-solid fa-pause"></i>' : '<i class="fa-solid fa-play"></i>';
-}
-
-function formatTime(seconds) {
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-// コントロールイベント
-playBtn.addEventListener('click', togglePlay);
-document.getElementById('next-btn').addEventListener('click', playNextTrack);
-document.getElementById('prev-btn').addEventListener('click', playPrevTrack);
-
-seekBar.addEventListener('input', () => {
-    const time = (seekBar.value / 100) * audioPlayer.duration;
-    audioPlayer.currentTime = time;
-});
-
-volumeBar.addEventListener('input', () => {
-    audioPlayer.volume = volumeBar.value / 100;
-});
+playBtn.onclick = togglePlay;
+document.getElementById('next-btn').onclick = playNextTrack;
+document.getElementById('prev-btn').onclick = playPrevTrack;
+document.getElementById('seek-bar').oninput = (e) => audioPlayer.currentTime = (e.target.value / 100) * audioPlayer.duration;
+document.getElementById('volume-bar').oninput = (e) => audioPlayer.volume = e.target.value / 100;
 
 // ==========================================
-// 8. 統計ログの記録とChart.js描画
+// 6. エディター画面・プレビュー (Web Audio API)
 // ==========================================
-function startPlaybackLogging(track) {
-    clearInterval(playbackLogTimer);
-    // 10秒ごとにログDBに10秒再生したことを記録する
-    playbackLogTimer = setInterval(() => {
-        if (!audioPlayer.paused) {
-            logPlayback(track, 10);
-        }
-    }, 10000);
-}
+let editorAudioCtx = null;
+let editorSource = null;
 
-function logPlayback(track, seconds) {
-    const transaction = db.transaction(['logs'], 'readwrite');
-    const store = transaction.objectStore('logs');
-    store.add({
-        trackId: track.id,
-        artist: track.artist,
-        date: track.date, // 年代
-        tags: track.tags,
-        durationPlayed: seconds,
-        timestamp: Date.now()
-    });
-    
-    transaction.oncomplete = () => {
-        // リアルタイムでグラフを更新したい場合は呼び出す
-        // updateCharts(); 
-    };
-}
-
-// グラフの初期化と更新 (Chart.js)
-let charts = {};
-
-function initCharts() {
-    const ctxTotal = document.getElementById('chart-total').getContext('2d');
-    charts.total = new Chart(ctxTotal, { type: 'bar', data: { labels: [], datasets: [{ label: '再生時間 (秒)', data: [], backgroundColor: 'rgba(98, 0, 238, 0.5)' }] }});
-    
-    const ctxArtist = document.getElementById('chart-artist').getContext('2d');
-    charts.artist = new Chart(ctxArtist, { type: 'pie', data: { labels: [], datasets: [{ data: [], backgroundColor: ['#6200ee', '#03dac6', '#cf6679', '#bb86fc', '#018786'] }] }});
-}
-
-async function updateCharts() {
-    if (!charts.total) initCharts();
-    
-    // DBからログを集計してグラフに反映させる処理
-    // ※今回はサンプルとして、現在playlistにある曲の長さを元にモックデータを描画します
-    // 本格的な集計はDBの'logs'ストアから期間を指定してフィルタリングします。
-    
-    const artists = {};
-    AppState.playlist.forEach(t => {
-        artists[t.artist] = (artists[t.artist] || 0) + 1;
-    });
-
-    charts.artist.data.labels = Object.keys(artists);
-    charts.artist.data.datasets[0].data = Object.values(artists);
-    charts.artist.update();
-}
-
-// 初期ロード時の実行
-document.addEventListener('DOMContentLoaded', () => {
-    initCharts();
-});
-
-// ==========================================
-// 9. エディター画面の制御と音声処理
-// ==========================================
-let editingTrackId = null;
-
-// リストの編集ボタンが押されたときの処理
-document.getElementById('playlist').addEventListener('click', (e) => {
-    const editBtn = e.target.closest('.edit-track-btn');
-    if (editBtn) {
-        const trackId = editBtn.getAttribute('data-id');
-        loadTrackIntoEditor(trackId);
-        
-        // エディター画面へ遷移
-        document.querySelectorAll('.nav-links li').forEach(n => n.classList.remove('active'));
-        document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
-        document.querySelector('[data-target="editor-view"]').classList.add('active');
-        document.getElementById('editor-view').classList.add('active');
-    }
-});
-
-function loadTrackIntoEditor(trackId) {
-    const track = AppState.playlist.find(t => t.id === trackId);
+function openEditor(id) {
+    const track = AppState.tracks.find(t => t.id === id);
     if (!track) return;
+    AppState.editingTrackId = id;
     
-    editingTrackId = trackId;
-    
+    document.getElementById('edit-target-name').textContent = track.title;
     document.getElementById('edit-title').value = track.title;
     document.getElementById('edit-artist').value = track.artist;
     document.getElementById('edit-date').value = track.date || '';
-    document.getElementById('edit-tags').value = track.tags ? track.tags.join(', ') : '';
+    document.getElementById('edit-tags').value = track.tags || '';
     document.getElementById('edit-thumb-preview').src = track.coverUrl;
-    
-    // 高度な編集のリセット
-    document.getElementById('edit-trim-start').value = '';
-    document.getElementById('edit-trim-end').value = '';
-    document.getElementById('edit-volume').value = 100;
-    document.getElementById('edit-key').value = 0;
-    document.getElementById('edit-format').value = 'original';
+    document.getElementById('edit-trim-start').value = track.trimStart || 0;
+    document.getElementById('edit-trim-end').value = track.trimEnd || 0;
+    document.getElementById('edit-volume').value = track.volume || 100;
+    document.getElementById('edit-volume-val').textContent = (track.volume || 100) + '%';
+    document.getElementById('edit-key').value = track.key || 0;
+
+    // タブ切り替え
+    document.querySelectorAll('.nav-links li').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
+    document.querySelector('[data-target="editor-view"]').classList.add('active');
+    document.getElementById('editor-view').classList.add('active');
 }
 
-// 編集の保存処理
-document.getElementById('btn-save-overwrite').addEventListener('click', () => applyEdits(false));
-document.getElementById('btn-save-new').addEventListener('click', () => applyEdits(true));
-document.getElementById('btn-download-edited').addEventListener('click', downloadEditedAudio);
+document.getElementById('edit-volume').oninput = (e) => document.getElementById('edit-volume-val').textContent = e.target.value + '%';
 
-async function applyEdits(isNew) {
-    if (!editingTrackId) return alert('編集するトラックが選択されていません。');
+// サムネイル変更
+document.getElementById('btn-change-thumb').onclick = () => document.getElementById('edit-thumb-input').click();
+document.getElementById('edit-thumb-input').onchange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = (ev) => document.getElementById('edit-thumb-preview').src = ev.target.result;
+        reader.readAsDataURL(file);
+    }
+};
+
+// プレビュー再生
+document.getElementById('btn-preview').onclick = async () => {
+    if (!AppState.editingTrackId) return alert('ファイルを選択してください');
+    if (editorAudioCtx) editorAudioCtx.close();
     
-    const trackIndex = AppState.playlist.findIndex(t => t.id === editingTrackId);
-    let track = AppState.playlist[trackIndex];
+    editorAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
     
-    // メタデータの更新
-    const newTags = document.getElementById('edit-tags').value.split(',').map(s => s.trim()).filter(s => s);
+    db.transaction('audioFiles', 'readonly').objectStore('audioFiles').get(AppState.editingTrackId).onsuccess = async (e) => {
+        const file = e.target.result.file;
+        const arrayBuffer = await file.arrayBuffer();
+        const audioBuffer = await editorAudioCtx.decodeAudioData(arrayBuffer);
+        
+        editorSource = editorAudioCtx.createBufferSource();
+        editorSource.buffer = audioBuffer;
+        
+        // 音量
+        const gainNode = editorAudioCtx.createGain();
+        gainNode.gain.value = document.getElementById('edit-volume').value / 100;
+        
+        // キー変更 (playbackRateで簡易的に実装)
+        const keyShift = parseFloat(document.getElementById('edit-key').value);
+        editorSource.playbackRate.value = Math.pow(2, keyShift / 12);
+        
+        editorSource.connect(gainNode);
+        gainNode.connect(editorAudioCtx.destination);
+        
+        const startTime = parseFloat(document.getElementById('edit-trim-start').value) || 0;
+        const endTime = parseFloat(document.getElementById('edit-trim-end').value) || audioBuffer.duration;
+        const duration = endTime - startTime;
+        
+        editorSource.start(0, startTime, duration > 0 ? duration : undefined);
+    };
+};
+
+document.getElementById('btn-stop-preview').onclick = () => {
+    if (editorSource) { editorSource.stop(); editorSource = null; }
+};
+
+// 保存と変換 (WAV)
+document.getElementById('btn-save-overwrite').onclick = () => saveEditedTrack(true);
+document.getElementById('btn-save-new').onclick = () => saveEditedTrack(false);
+
+async function saveEditedTrack(overwrite) {
+    if (!AppState.editingTrackId) return;
+    const track = AppState.tracks.find(t => t.id === AppState.editingTrackId);
     
-    const updatedMeta = {
+    const newMeta = {
         ...track,
         title: document.getElementById('edit-title').value,
         artist: document.getElementById('edit-artist').value,
         date: document.getElementById('edit-date').value,
-        tags: newTags
+        tags: document.getElementById('edit-tags').value,
+        coverUrl: document.getElementById('edit-thumb-preview').src,
+        trimStart: parseFloat(document.getElementById('edit-trim-start').value) || 0,
+        trimEnd: parseFloat(document.getElementById('edit-trim-end').value) || 0,
+        volume: parseInt(document.getElementById('edit-volume').value),
+        key: parseFloat(document.getElementById('edit-key').value)
     };
 
-    if (isNew) {
-        updatedMeta.id = crypto.randomUUID();
-        updatedMeta.title += " (Copy)";
-        updatedMeta.addedAt = Date.now();
-    }
-
-    // DBへの保存
-    const transaction = db.transaction(['audioFiles', 'metadata'], 'readwrite');
-    const audioStore = transaction.objectStore('audioFiles');
-    const metaStore = transaction.objectStore('metadata');
-    
-    // 音声ファイルのコピー（今回は高度な変換をせずにメタデータのみ新しくする挙動）
-    const getRequest = audioStore.get(editingTrackId);
-    getRequest.onsuccess = () => {
-        const fileData = getRequest.result;
-        if (isNew) {
-            audioStore.put({ id: updatedMeta.id, file: fileData.file });
-            metaStore.put(updatedMeta);
-            AppState.playlist.push(updatedMeta);
-        } else {
-            metaStore.put(updatedMeta);
-            AppState.playlist[trackIndex] = updatedMeta;
-        }
+    if (!overwrite) {
+        newMeta.id = crypto.randomUUID();
+        newMeta.title += ' (Copy)';
+        // Fileの実体もコピー
+        db.transaction('audioFiles', 'readonly').objectStore('audioFiles').get(track.id).onsuccess = (e) => {
+            const newFile = new File([e.target.result.file], newMeta.title, {type: e.target.result.file.type});
+            saveTrack({ ...newMeta, file: newFile }).then(() => alert('別名で保存しました'));
+        };
+    } else {
+        db.transaction('metadata', 'readwrite').objectStore('metadata').put(newMeta);
+        const index = AppState.tracks.findIndex(t => t.id === newMeta.id);
+        if (index > -1) AppState.tracks[index] = newMeta;
         renderPlaylist();
-        alert('保存が完了しました。');
-    };
-}
-
-// Web Audio API を用いた音声加工とダウンロード
-async function downloadEditedAudio() {
-    if (!editingTrackId) return;
-    
-    const trimStart = parseFloat(document.getElementById('edit-trim-start').value) || 0;
-    const trimEnd = parseFloat(document.getElementById('edit-trim-end').value) || 0;
-    const volume = parseFloat(document.getElementById('edit-volume').value) || 100;
-    const keyChange = parseFloat(document.getElementById('edit-key').value) || 0;
-    
-    // DBから元ファイルを取得
-    const transaction = db.transaction(['audioFiles'], 'readonly');
-    const request = transaction.objectStore('audioFiles').get(editingTrackId);
-    
-    request.onsuccess = async () => {
-        const file = request.result.file;
-        const arrayBuffer = await file.arrayBuffer();
-        
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-        
-        // オフラインレンダリングの設定
-        const startOffset = Math.max(0, trimStart);
-        const endOffset = trimEnd > startOffset ? Math.min(audioBuffer.duration, trimEnd) : audioBuffer.duration;
-        const duration = endOffset - startOffset;
-        
-        if (duration <= 0) return alert('トリミングの範囲が不正です。');
-        
-        const offlineCtx = new OfflineAudioContext(audioBuffer.numberOfChannels, audioCtx.sampleRate * duration, audioCtx.sampleRate);
-        const source = offlineCtx.createBufferSource();
-        source.buffer = audioBuffer;
-        
-        // キー変更 (半角音1つ = 100セント)
-        source.detune.value = keyChange * 100;
-        
-        // 音量調整
-        const gainNode = offlineCtx.createGain();
-        gainNode.gain.value = volume / 100;
-        
-        source.connect(gainNode);
-        gainNode.connect(offlineCtx.destination);
-        source.start(0, startOffset, duration);
-        
-        const renderedBuffer = await offlineCtx.startRendering();
-        
-        // WAV形式に変換してダウンロード
-        const wavBlob = audioBufferToWav(renderedBuffer);
-        const url = URL.createObjectURL(wavBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        const title = document.getElementById('edit-title').value || 'edited_audio';
-        a.download = `${title}.wav`;
-        a.click();
-        URL.revokeObjectURL(url);
-    };
-}
-
-// AudioBufferをWAV Blobに変換するヘルパー関数
-function audioBufferToWav(buffer) {
-    const numOfChan = buffer.numberOfChannels;
-    const length = buffer.length * numOfChan * 2 + 44;
-    const bufferArray = new ArrayBuffer(length);
-    const view = new DataView(bufferArray);
-    const channels = [];
-    let offset = 0;
-    let pos = 0;
-
-    // WAVヘッダー書き込み
-    const setUint16 = (data) => { view.setUint16(pos, data, true); pos += 2; };
-    const setUint32 = (data) => { view.setUint32(pos, data, true); pos += 4; };
-    
-    view.setUint32(pos, 1179011410, false); pos += 4; // "RIFF"
-    setUint32(length - 8); 
-    view.setUint32(pos, 1163280727, false); pos += 4; // "WAVE"
-    view.setUint32(pos, 1718449184, false); pos += 4; // "fmt "
-    setUint32(16); setUint16(1); setUint16(numOfChan);
-    setUint32(buffer.sampleRate);
-    setUint32(buffer.sampleRate * 2 * numOfChan);
-    setUint16(numOfChan * 2); setUint16(16);
-    view.setUint32(pos, 1684108385, false); pos += 4; // "data"
-    setUint32(length - pos - 4);
-
-    // データ書き込み
-    for (let i = 0; i < buffer.numberOfChannels; i++) channels.push(buffer.getChannelData(i));
-    while (offset < buffer.length) {
-        for (let i = 0; i < numOfChan; i++) {
-            let sample = Math.max(-1, Math.min(1, channels[i][offset]));
-            sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0;
-            view.setInt16(pos, sample, true); pos += 2;
-        }
-        offset++;
+        alert('上書き保存しました');
     }
-    return new Blob([bufferArray], { type: "audio/wav" });
 }
+
+// ==========================================
+// 7. UI イベント初期化
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    initIndexedDB();
+    
+    // タブ切り替え
+    document.querySelectorAll('.nav-links li').forEach(link => {
+        link.onclick = () => {
+            document.querySelectorAll('.nav-links li').forEach(n => n.classList.remove('active'));
+            document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
+            link.classList.add('active');
+            document.getElementById(link.dataset.target).classList.add('active');
+        };
+    });
+
+    // D&D
+    const dropZone = document.getElementById('drop-zone');
+    const overlay = document.getElementById('drop-overlay');
+    dropZone.ondragover = (e) => { e.preventDefault(); overlay.classList.add('drag-over'); };
+    dropZone.ondragleave = (e) => { e.preventDefault(); overlay.classList.remove('drag-over'); };
+    dropZone.ondrop = (e) => {
+        e.preventDefault(); overlay.classList.remove('drag-over');
+        if (e.dataTransfer.files.length > 0) processAndAddFiles(e.dataTransfer.files);
+    };
+    
+    document.getElementById('add-file-btn').onclick = () => document.getElementById('file-input').click();
+    document.getElementById('file-input').onchange = (e) => processAndAddFiles(e.target.files);
+});
+
+// 並べ替え
+document.getElementById('sort-select').onchange = (e) => {
+    const [key, order] = e.target.value.split('_');
+    AppState.tracks.sort((a, b) => {
+        let valA = a[key === 'name' ? 'title' : key]; let valB = b[key === 'name' ? 'title' : key];
+        if (valA < valB) return order === 'asc' ? -1 : 1;
+        if (valA > valB) return order === 'asc' ? 1 : -1; return 0;
+    });
+    renderPlaylist();
+};
+document.getElementById('shuffle-btn').onclick = () => {
+    for (let i = AppState.tracks.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [AppState.tracks[i], AppState.tracks[j]] = [AppState.tracks[j], AppState.tracks[i]];
+    }
+    renderPlaylist();
+};
