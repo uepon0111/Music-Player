@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" id="cache-meta" />
+  <meta http-equiv="Pragma" content="no-cache" id="pragma-meta" />
+  <meta http-equiv="Expires" content="0" id="expires-meta" />
+  <title>Harmonia - 音楽プレイヤー</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600;700&family=DM+Serif+Display:ital@0;1&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- ========== SIDEBAR NAV ========== -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <span class="logo-icon"><i class="fa-solid fa-music"></i></span>
+    <span class="logo-text">Harmonia</span>
+  </div>
+  <ul class="sidebar-nav">
+    <li class="nav-item active" data-page="player">
+      <i class="fa-solid fa-headphones"></i>
+      <span>プレイヤー</span>
+    </li>
+    <li class="nav-item" data-page="logs">
+      <i class="fa-solid fa-chart-line"></i>
+      <span>ログ</span>
+    </li>
+    <li class="nav-item" data-page="editor">
+      <i class="fa-solid fa-sliders"></i>
+      <span>編集</span>
+    </li>
+  </ul>
+  <div class="sidebar-bottom">
+    <div class="auth-section" id="authSection">
+      <button class="btn-auth" id="btnLogin" onclick="App.auth.login()">
+        <i class="fa-brands fa-google"></i>
+        <span>Googleでログイン</span>
+      </button>
+      <div class="user-info hidden" id="userInfo">
+        <img class="user-avatar" id="userAvatar" src="" alt="アバター" />
+        <div class="user-details">
+          <span class="user-name" id="userName"></span>
+          <button class="btn-logout" onclick="App.auth.logout()">ログアウト</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- Mobile Bottom Nav -->
+<nav class="bottom-nav" id="bottomNav">
+  <div class="bottom-nav-item active" data-page="player">
+    <i class="fa-solid fa-headphones"></i>
+    <span>プレイヤー</span>
+  </div>
+  <div class="bottom-nav-item" data-page="logs">
+    <i class="fa-solid fa-chart-line"></i>
+    <span>ログ</span>
+  </div>
+  <div class="bottom-nav-item" data-page="editor">
+    <i class="fa-solid fa-sliders"></i>
+    <span>編集</span>
+  </div>
+  <div class="bottom-nav-item" id="mobileAuthBtn" onclick="App.auth.toggleMobileAuth()">
+    <i class="fa-brands fa-google"></i>
+    <span>アカウント</span>
+  </div>
+</nav>
+
+<!-- Mobile Auth Popup -->
+<div class="mobile-auth-popup hidden" id="mobileAuthPopup">
+  <div class="mobile-auth-content">
+    <button class="btn-auth" id="mobileBtnLogin" onclick="App.auth.login()">
+      <i class="fa-brands fa-google"></i>
+      <span>Googleでログイン</span>
+    </button>
+    <div class="user-info hidden" id="mobileUserInfo">
+      <img class="user-avatar" id="mobileUserAvatar" src="" alt="" />
+      <div class="user-details">
+        <span class="user-name" id="mobileUserName"></span>
+        <button class="btn-logout" onclick="App.auth.logout()">ログアウト</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== MAIN CONTENT ========== -->
+<main class="main-content" id="mainContent">
+
+  <!-- ===== PAGE: PLAYER ===== -->
+  <section class="page active" id="page-player">
+    <div class="player-layout">
+
+      <!-- Left: Now Playing -->
+      <div class="now-playing-panel">
+        <div class="album-art-container">
+          <div class="album-art" id="albumArt">
+            <i class="fa-solid fa-music album-art-icon"></i>
+            <img id="albumArtImg" src="" alt="" class="hidden" />
+          </div>
+          <div class="album-art-shadow"></div>
+        </div>
+        <div class="track-info">
+          <div class="track-title" id="trackTitle">曲を選択してください</div>
+          <div class="track-artist" id="trackArtist">-</div>
+          <div class="track-album" id="trackAlbum">-</div>
+        </div>
+        <div class="progress-section">
+          <div class="progress-bar-container" id="progressContainer">
+            <div class="progress-bar" id="progressBar"></div>
+            <div class="progress-handle" id="progressHandle"></div>
+          </div>
+          <div class="progress-times">
+            <span id="currentTime">0:00</span>
+            <span id="totalTime">0:00</span>
+          </div>
+        </div>
+        <div class="player-controls">
+          <button class="ctrl-btn" id="btnShuffle" title="シャッフル" onclick="App.player.toggleShuffle()">
+            <i class="fa-solid fa-shuffle"></i>
+          </button>
+          <button class="ctrl-btn" id="btnPrev" title="前の曲" onclick="App.player.prev()">
+            <i class="fa-solid fa-backward-step"></i>
+          </button>
+          <button class="ctrl-btn play-btn" id="btnPlay" title="再生/一時停止" onclick="App.player.togglePlay()">
+            <i class="fa-solid fa-play" id="playIcon"></i>
+          </button>
+          <button class="ctrl-btn" id="btnNext" title="次の曲" onclick="App.player.next()">
+            <i class="fa-solid fa-forward-step"></i>
+          </button>
+          <button class="ctrl-btn" id="btnRepeat" title="リピート" onclick="App.player.toggleRepeat()">
+            <i class="fa-solid fa-repeat"></i>
+          </button>
+        </div>
+        <div class="volume-section">
+          <i class="fa-solid fa-volume-low vol-icon" id="volIcon" onclick="App.player.toggleMute()"></i>
+          <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="80" oninput="App.player.setVolume(this.value)" />
+          <span class="vol-value" id="volValue">80%</span>
+        </div>
+      </div>
+
+      <!-- Right: Playlists & Queue -->
+      <div class="playlist-panel">
+        <!-- Playlist Header -->
+        <div class="panel-header">
+          <h2 class="panel-title">プレイリスト</h2>
+          <div class="panel-actions">
+            <button class="icon-btn" title="新規プレイリスト" onclick="App.playlists.create()">
+              <i class="fa-solid fa-plus"></i>
+            </button>
+            <button class="icon-btn" title="ファイル追加" onclick="document.getElementById('fileInput').click()">
+              <i class="fa-solid fa-file-audio"></i>
+            </button>
+            <button class="icon-btn" id="btnGDrive" title="Google Driveから追加" onclick="App.gdrive.openPicker()" style="display:none;">
+              <i class="fa-brands fa-google-drive"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Playlist Tabs -->
+        <div class="playlist-tabs" id="playlistTabs"></div>
+
+        <!-- Sort & Controls -->
+        <div class="list-controls">
+          <select class="sort-select" id="sortSelect" onchange="App.playlists.sort(this.value)">
+            <option value="manual">手動順</option>
+            <option value="name-asc">名前 (昇順)</option>
+            <option value="name-desc">名前 (降順)</option>
+            <option value="added-asc">追加順 (古い)</option>
+            <option value="added-desc">追加順 (新しい)</option>
+            <option value="duration-asc">長さ (短い)</option>
+            <option value="duration-desc">長さ (長い)</option>
+            <option value="date-asc">投稿日 (古い)</option>
+            <option value="date-desc">投稿日 (新しい)</option>
+            <option value="random">ランダム</option>
+          </select>
+          <button class="icon-btn" title="プレイリスト削除" onclick="App.playlists.deleteCurrentPrompt()">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+          <button class="icon-btn" title="プレイリスト名変更" onclick="App.playlists.renamePrompt()">
+            <i class="fa-solid fa-pen"></i>
+          </button>
+        </div>
+
+        <!-- Drop Zone -->
+        <div class="drop-zone" id="dropZone">
+          <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
+          <p>ここにファイルをドロップ<br/><small>または <button class="link-btn" onclick="document.getElementById('fileInput').click()">ファイルを選択</button></small></p>
+        </div>
+        <input type="file" id="fileInput" accept="audio/*" multiple style="display:none;" onchange="App.files.handleInput(this.files)" />
+
+        <!-- Track List -->
+        <div class="track-list-container">
+          <ul class="track-list" id="trackList"></ul>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===== PAGE: LOGS ===== -->
+  <section class="page" id="page-logs">
+    <div class="logs-layout">
+      <div class="logs-header">
+        <h1 class="page-title">再生ログ</h1>
+        <div class="logs-period-tabs">
+          <button class="period-tab active" data-period="hour">時間</button>
+          <button class="period-tab" data-period="day">日</button>
+          <button class="period-tab" data-period="week">週</button>
+          <button class="period-tab" data-period="month">月</button>
+          <button class="period-tab" data-period="year">年</button>
+        </div>
+      </div>
+      <div class="logs-tabs">
+        <button class="log-cat-tab active" data-cat="total">総合</button>
+        <button class="log-cat-tab" data-cat="artist">アーティスト別</button>
+        <button class="log-cat-tab" data-cat="tag">タグ別</button>
+        <button class="log-cat-tab" data-cat="era">年代別</button>
+      </div>
+      <div class="logs-summary">
+        <div class="summary-card">
+          <div class="summary-label">総再生時間</div>
+          <div class="summary-value" id="totalPlayTime">0:00:00</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">再生回数</div>
+          <div class="summary-value" id="totalPlayCount">0</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">最多再生</div>
+          <div class="summary-value" id="mostPlayed">-</div>
+        </div>
+      </div>
+      <div class="chart-container">
+        <canvas id="logChart"></canvas>
+      </div>
+      <div class="log-detail-table-wrap">
+        <table class="log-table" id="logTable">
+          <thead>
+            <tr>
+              <th>曲名</th>
+              <th>アーティスト</th>
+              <th>再生時間</th>
+              <th>再生回数</th>
+            </tr>
+          </thead>
+          <tbody id="logTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== PAGE: EDITOR ===== -->
+  <section class="page" id="page-editor">
+    <div class="editor-layout">
+      <div class="editor-header">
+        <h1 class="page-title">音声ファイル編集</h1>
+      </div>
+      <div class="editor-body">
+        <!-- Track selector -->
+        <div class="editor-track-selector">
+          <label class="field-label">編集するファイルを選択</label>
+          <select class="editor-select" id="editorTrackSelect" onchange="App.editor.loadTrack(this.value)">
+            <option value="">-- ファイルを選択 --</option>
+          </select>
+        </div>
+
+        <div class="editor-main hidden" id="editorMain">
+          <!-- Waveform / Preview -->
+          <div class="editor-preview-section">
+            <div class="waveform-container" id="waveformContainer">
+              <canvas id="waveformCanvas"></canvas>
+              <div class="trim-region" id="trimRegion">
+                <div class="trim-handle trim-start" id="trimStart"></div>
+                <div class="trim-handle trim-end" id="trimEnd"></div>
+              </div>
+            </div>
+            <div class="editor-preview-controls">
+              <button class="btn-secondary" onclick="App.editor.previewPlay()">
+                <i class="fa-solid fa-play"></i> プレビュー
+              </button>
+              <button class="btn-secondary" onclick="App.editor.previewStop()">
+                <i class="fa-solid fa-stop"></i> 停止
+              </button>
+              <span class="preview-time" id="editorPreviewTime">0:00 / 0:00</span>
+            </div>
+          </div>
+
+          <!-- Edit Tabs -->
+          <div class="editor-tabs">
+            <button class="editor-tab active" data-tab="meta">メタデータ</button>
+            <button class="editor-tab" data-tab="thumbnail">サムネイル</button>
+            <button class="editor-tab" data-tab="audio">音声加工</button>
+            <button class="editor-tab" data-tab="convert">変換</button>
+          </div>
+
+          <!-- Meta Tab -->
+          <div class="editor-tab-content active" id="tab-meta">
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="field-label">曲名</label>
+                <input type="text" class="field-input" id="metaTitle" placeholder="曲名" />
+              </div>
+              <div class="form-group">
+                <label class="field-label">アーティスト</label>
+                <input type="text" class="field-input" id="metaArtist" placeholder="アーティスト名" />
+              </div>
+              <div class="form-group">
+                <label class="field-label">アルバム</label>
+                <input type="text" class="field-input" id="metaAlbum" placeholder="アルバム名" />
+              </div>
+              <div class="form-group">
+                <label class="field-label">投稿日（年）</label>
+                <input type="number" class="field-input" id="metaYear" placeholder="例: 2023" min="1900" max="2099" />
+              </div>
+              <div class="form-group">
+                <label class="field-label">ジャンル</label>
+                <input type="text" class="field-input" id="metaGenre" placeholder="ジャンル" />
+              </div>
+              <div class="form-group form-full">
+                <label class="field-label">タグ</label>
+                <div class="tags-input-wrap">
+                  <div class="tags-display" id="tagsDisplay"></div>
+                  <input type="text" class="field-input tags-input" id="tagsInput" placeholder="タグを入力してEnter" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Thumbnail Tab -->
+          <div class="editor-tab-content" id="tab-thumbnail">
+            <div class="thumbnail-editor">
+              <div class="thumb-preview-wrap">
+                <div class="thumb-preview" id="thumbPreview">
+                  <i class="fa-solid fa-image thumb-icon"></i>
+                  <img id="thumbPreviewImg" src="" alt="" class="hidden" />
+                </div>
+              </div>
+              <div class="thumb-actions">
+                <button class="btn-secondary" onclick="document.getElementById('thumbFileInput').click()">
+                  <i class="fa-solid fa-upload"></i> 画像を選択
+                </button>
+                <button class="btn-secondary" onclick="App.editor.clearThumbnail()">
+                  <i class="fa-solid fa-trash"></i> 削除
+                </button>
+                <input type="file" id="thumbFileInput" accept="image/*" style="display:none;" onchange="App.editor.setThumbnail(this)" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Audio Tab -->
+          <div class="editor-tab-content" id="tab-audio">
+            <div class="audio-edit-grid">
+              <div class="form-group">
+                <label class="field-label">トリミング 開始 (秒)</label>
+                <input type="number" class="field-input" id="trimStartVal" min="0" step="0.1" value="0" oninput="App.editor.updateTrimRegion()" />
+              </div>
+              <div class="form-group">
+                <label class="field-label">トリミング 終了 (秒)</label>
+                <input type="number" class="field-input" id="trimEndVal" min="0" step="0.1" value="0" oninput="App.editor.updateTrimRegion()" />
+              </div>
+              <div class="form-group">
+                <label class="field-label">音量調整 (<span id="volumeVal">100</span>%)</label>
+                <input type="range" class="volume-slider full-width" id="audioVolume" min="0" max="200" value="100" oninput="document.getElementById('volumeVal').textContent=this.value; App.editor.updatePreview()" />
+              </div>
+              <div class="form-group">
+                <label class="field-label">キー変更 (<span id="keyVal">0</span> 半音)</label>
+                <input type="range" class="volume-slider full-width" id="audioKey" min="-12" max="12" value="0" oninput="document.getElementById('keyVal').textContent=this.value; App.editor.updatePreview()" />
+              </div>
+              <div class="form-group">
+                <label class="field-label">テンポ (<span id="tempoVal">100</span>%)</label>
+                <input type="range" class="volume-slider full-width" id="audioTempo" min="50" max="200" value="100" oninput="document.getElementById('tempoVal').textContent=this.value; App.editor.updatePreview()" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Convert Tab -->
+          <div class="editor-tab-content" id="tab-convert">
+            <div class="form-group">
+              <label class="field-label">出力フォーマット</label>
+              <select class="editor-select" id="convertFormat">
+                <option value="mp3">MP3</option>
+                <option value="wav">WAV</option>
+                <option value="ogg">OGG</option>
+                <option value="flac">FLAC</option>
+                <option value="aac">AAC (M4A)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="field-label">ビットレート (MP3/AAC)</label>
+              <select class="editor-select" id="convertBitrate">
+                <option value="128">128 kbps</option>
+                <option value="192">192 kbps</option>
+                <option value="256" selected>256 kbps</option>
+                <option value="320">320 kbps</option>
+              </select>
+            </div>
+            <div class="ffmpeg-status" id="ffmpegStatus">
+              <i class="fa-solid fa-circle-info"></i>
+              FFmpegを読み込み中です...
+            </div>
+          </div>
+
+          <!-- Save / Download actions -->
+          <div class="editor-actions">
+            <div class="save-mode-wrap">
+              <label class="field-label">保存方法</label>
+              <div class="radio-group">
+                <label class="radio-label">
+                  <input type="radio" name="saveMode" value="new" checked /> 新規トラックとして追加
+                </label>
+                <label class="radio-label">
+                  <input type="radio" name="saveMode" value="overwrite" /> 上書き保存
+                </label>
+              </div>
+            </div>
+            <div class="editor-btns">
+              <button class="btn-primary" onclick="App.editor.apply()">
+                <i class="fa-solid fa-check"></i> 適用
+              </button>
+              <button class="btn-secondary" onclick="App.editor.download()">
+                <i class="fa-solid fa-download"></i> ダウンロード
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ========== MODALS ========== -->
+
+<!-- Add File Modal -->
+<div class="modal-overlay hidden" id="addFileModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">ファイルを追加</h3>
+      <button class="modal-close" onclick="App.modal.close('addFileModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-file-info" id="modalFileInfo"></div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="field-label">曲名</label>
+          <input type="text" class="field-input" id="addTitle" />
+        </div>
+        <div class="form-group">
+          <label class="field-label">アーティスト</label>
+          <input type="text" class="field-input" id="addArtist" />
+        </div>
+        <div class="form-group">
+          <label class="field-label">アルバム</label>
+          <input type="text" class="field-input" id="addAlbum" />
+        </div>
+        <div class="form-group">
+          <label class="field-label">投稿年</label>
+          <input type="number" class="field-input" id="addYear" min="1900" max="2099" />
+        </div>
+        <div class="form-group">
+          <label class="field-label">ジャンル</label>
+          <input type="text" class="field-input" id="addGenre" />
+        </div>
+        <div class="form-group form-full">
+          <label class="field-label">タグ</label>
+          <div class="tags-input-wrap">
+            <div class="tags-display" id="addTagsDisplay"></div>
+            <input type="text" class="field-input tags-input" id="addTagsInput" placeholder="タグを入力してEnter" />
+          </div>
+        </div>
+        <div class="form-group form-full">
+          <label class="field-label">サムネイル</label>
+          <div class="thumb-mini-wrap">
+            <div class="thumb-mini" id="addThumbPreview">
+              <i class="fa-solid fa-music"></i>
+            </div>
+            <button class="btn-secondary btn-sm" onclick="document.getElementById('addThumbInput').click()">
+              <i class="fa-solid fa-image"></i> 選択
+            </button>
+            <input type="file" id="addThumbInput" accept="image/*" style="display:none;" onchange="App.modal.setThumb(this)" />
+          </div>
+        </div>
+        <div class="form-group form-full">
+          <label class="field-label">追加先プレイリスト</label>
+          <select class="editor-select" id="addPlaylistSelect"></select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="App.modal.close('addFileModal')">キャンセル</button>
+      <button class="btn-primary" onclick="App.modal.confirmAdd()">追加</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div class="modal-overlay hidden" id="confirmModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 class="modal-title" id="confirmTitle">確認</h3>
+      <button class="modal-close" onclick="App.modal.close('confirmModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <p id="confirmMessage"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="App.modal.close('confirmModal')">キャンセル</button>
+      <button class="btn-danger" id="confirmOkBtn" onclick="">確認</button>
+    </div>
+  </div>
+</div>
+
+<!-- Prompt Modal -->
+<div class="modal-overlay hidden" id="promptModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 class="modal-title" id="promptTitle">入力</h3>
+      <button class="modal-close" onclick="App.modal.close('promptModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <p id="promptMessage"></p>
+      <input type="text" class="field-input" id="promptInput" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="App.modal.close('promptModal')">キャンセル</button>
+      <button class="btn-primary" id="promptOkBtn">確認</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Progress overlay for processing -->
+<div class="processing-overlay hidden" id="processingOverlay">
+  <div class="processing-box">
+    <div class="processing-spinner"></div>
+    <p id="processingMessage">処理中...</p>
+    <div class="processing-bar-wrap">
+      <div class="processing-bar" id="processingBar"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Chart.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<!-- App Scripts -->
+<script src="js/config.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/gdrive.js"></script>
+<script src="js/player.js"></script>
+<script src="js/playlists.js"></script>
+<script src="js/files.js"></script>
+<script src="js/editor.js"></script>
+<script src="js/logs.js"></script>
+<script src="js/modal.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
