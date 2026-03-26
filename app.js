@@ -257,3 +257,335 @@ function handleFilesSelected(files) {
         processAndAddFiles(files); 
     };
 }
+// ==========================================
+// 5. ファイル処理とメタデータ抽出 (jsmediatags使用)
+// ==========================================
+async function processAndAddFiles(files) {
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!file.type.startsWith('audio/')) continue;
+
+        // jsmediatagsを使用してID3タグを読み込む
+        jsmediatags.read(file, {
+            onSuccess: async function(tag) {
+                const tags = tag.tags;
+                const trackData = createTrackData(file, tags);
+                await saveTrack(trackData);
+            },
+            onError: async function(error) {
+                console.warn('Metadata not found for', file.name);
+                const trackData = createTrackData(file, {});
+                await saveTrack(trackData);
+            }
+        });
+    }
+}
+
+function createTrackData(file, tags) {
+    const trackData = {
+        id: crypto.randomUUID(), // 一意のIDを生成
+        file: file, // 実際のファイルオブジェクト
+        title: tags.title || file.name.replace(/\.[^/.]+$/, ""),
+        artist: tags.artist || 'Unknown Artist',
+        duration: 0, // 読み込み時に更新
+        addedAt: Date.now(),
+        date: tags.year || 'Unknown',
+        tags: [], 
+        coverUrl: 'default-cover.jpg'
+    };
+
+    // サムネイル画像のパース
+    if (tags.picture) {
+        const { data, format } = tags.picture;
+        let base64String = "";
+        for (let j = 0; j < data.length; j++) {
+            base64String += String.fromCharCode(data[j]);
+        }
+        trackData.coverUrl = `data:${format};base64,${window.btoa(base64String)}`;
+    }
+    return trackData;
+}
+
+async function saveTrack(trackData) {
+    // IndexedDBに保存
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(['audioFiles', 'metadata'], 'readwrite');
+        const audioStore = transaction.objectStore('audioFiles');
+        const metaStore = transaction.objectStore('metadata');
+
+        audioStore.put({ id: trackData.id, file: trackData.file });
+        
+        // ファイル本体を除外してメタデータのみ保存
+        const { file, ...meta } = trackData;
+        metaStore.put(meta);
+
+        transaction.oncomplete = () => {
+            AppState.playlist.push(meta);
+            renderPlaylist();
+            resolve();
+        };
+        transaction.onerror = (e) => reject(e.target.error);
+    });
+}
+
+// ==========================================
+// 6. 再生リストの描画と並べ替え
+// ==========================================
+function renderPlaylist() {
+    const playlistEl = document.getElementById('playlist');
+    playlistEl.innerHTML = '';
+
+    AppState.playlist.forEach((track, index) => {
+        const li = document.createElement('li');
+        li.className = 'playlist-item';
+        if (index === AppState.currentTrackIndex) li.style.backgroundColor = 'var(--hover-color)';
+        
+        li.innerHTML = `
+            <i class="fa-solid fa-music text-secondary"></i>
+            <div class="info">
+                <div class="title">${track.title}</div>
+                <div class="artist">${track.artist}</div>
+            </div>
+            <div class="actions">
+                <button class="btn icon-btn play-track-btn" data-index="${index}"><i class="fa-solid fa-play"></i></button>
+                <button class="btn icon-btn edit-track-btn" data-id="${track.id}"><i class="fa-solid fa-pen"></i></button>
+                <button class="btn icon-btn danger delete-track-btn" data-id="${track.id}"><i class="fa-solid fa-trash"></i></button>
+            </div>
+        `;
+        playlistEl.appendChild(li);
+    });
+
+    attachPlaylistEvents();
+    updateCharts(); // リスト更新時にグラフも更新
+}
+
+function attachPlaylistEvents() {
+    document.querySelectorAll('.play-track-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const index = parseInt(e.currentTarget.getAttribute('data-index'));
+            playTrack(index);
+        });
+    });
+
+    document.querySelectorAll('.delete-track-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const id = e.currentTarget.getAttribute('data-id');
+            await deleteTrack(id);
+        });
+    });
+
+    // エディターへの遷移は第4回で実装
+}
+
+// 並べ替えロジック
+document.getElementById('sort-select').addEventListener('change', (e) => {
+    const [key, order] = e.target.value.split('_');
+    AppState.playlist.sort((a, b) => {
+        let valA = a[key === 'name' ? 'title' : key];
+        let valB = b[key === 'name' ? 'title' : key];
+        
+        if (valA < valB) return order === 'asc' ? -1 : 1;
+        if (valA > valB) return order === 'asc' ? 1 : -1;
+        return 0;
+    });
+    renderPlaylist();
+});
+
+document.getElementById('shuffle-btn').addEventListener('click', () => {
+    for (let i = AppState.playlist.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [AppState.playlist[i], AppState.playlist[j]] = [AppState.playlist[j], AppState.playlist[i]];
+    }
+    renderPlaylist();
+});
+
+async function deleteTrack(id) {
+    // キャッシュからの削除
+    const transaction = db.transaction(['audioFiles', 'metadata'], 'readwrite');
+    transaction.objectStore('audioFiles').delete(id);
+    transaction.objectStore('metadata').delete(id);
+    
+    transaction.oncomplete = () => {
+        AppState.playlist = AppState.playlist.filter(t => t.id !== id);
+        renderPlaylist();
+    };
+    
+    // Google Driveから削除（ログイン時）
+    if (AppState.isGoogleLoggedIn) {
+        // ※ドライブ上のファイルIDがマッピングされている前提。実装の簡略化のためここでは省略します。
+        console.log("Deleted from local cache.");
+    }
+}
+
+// ==========================================
+// 7. オーディオプレイヤー制御
+// ==========================================
+const audioPlayer = new Audio();
+const playBtn = document.getElementById('play-btn');
+const seekBar = document.getElementById('seek-bar');
+const volumeBar = document.getElementById('volume-bar');
+let playbackLogTimer = null; // ログ記録用タイマー
+
+audioPlayer.addEventListener('timeupdate', () => {
+    if (!isNaN(audioPlayer.duration)) {
+        seekBar.value = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+        document.getElementById('time-current').textContent = formatTime(audioPlayer.currentTime);
+    }
+});
+
+audioPlayer.addEventListener('loadedmetadata', () => {
+    document.getElementById('time-total').textContent = formatTime(audioPlayer.duration);
+    // 初回ロード時にDBのdurationを更新
+    if (AppState.playlist[AppState.currentTrackIndex].duration === 0) {
+        AppState.playlist[AppState.currentTrackIndex].duration = audioPlayer.duration;
+        saveTrack(AppState.playlist[AppState.currentTrackIndex]); // DB更新
+    }
+});
+
+audioPlayer.addEventListener('ended', () => {
+    playNextTrack();
+});
+
+async function playTrack(index) {
+    if (index < 0 || index >= AppState.playlist.length) return;
+    
+    AppState.currentTrackIndex = index;
+    const trackMeta = AppState.playlist[index];
+    
+    // DBから音声ファイル本体を取得
+    const transaction = db.transaction(['audioFiles'], 'readonly');
+    const store = transaction.objectStore('audioFiles');
+    const request = store.get(trackMeta.id);
+    
+    request.onsuccess = () => {
+        if (request.result && request.result.file) {
+            const fileUrl = URL.createObjectURL(request.result.file);
+            audioPlayer.src = fileUrl;
+            audioPlayer.play();
+            AppState.isPlaying = true;
+            updatePlayerUI(trackMeta);
+            startPlaybackLogging(trackMeta);
+        }
+    };
+}
+
+function togglePlay() {
+    if (audioPlayer.src) {
+        if (audioPlayer.paused) {
+            audioPlayer.play();
+            AppState.isPlaying = true;
+        } else {
+            audioPlayer.pause();
+            AppState.isPlaying = false;
+        }
+        updatePlayButton();
+    }
+}
+
+function playNextTrack() {
+    let nextIndex = AppState.currentTrackIndex + 1;
+    if (nextIndex >= AppState.playlist.length) nextIndex = 0; // ループ
+    playTrack(nextIndex);
+}
+
+function playPrevTrack() {
+    let prevIndex = AppState.currentTrackIndex - 1;
+    if (prevIndex < 0) prevIndex = AppState.playlist.length - 1;
+    playTrack(prevIndex);
+}
+
+function updatePlayerUI(track) {
+    document.getElementById('current-title').textContent = track.title;
+    document.getElementById('current-artist').textContent = track.artist;
+    document.getElementById('current-thumb').src = track.coverUrl;
+    updatePlayButton();
+    renderPlaylist(); // リストのハイライト更新
+}
+
+function updatePlayButton() {
+    playBtn.innerHTML = AppState.isPlaying ? '<i class="fa-solid fa-pause"></i>' : '<i class="fa-solid fa-play"></i>';
+}
+
+function formatTime(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+// コントロールイベント
+playBtn.addEventListener('click', togglePlay);
+document.getElementById('next-btn').addEventListener('click', playNextTrack);
+document.getElementById('prev-btn').addEventListener('click', playPrevTrack);
+
+seekBar.addEventListener('input', () => {
+    const time = (seekBar.value / 100) * audioPlayer.duration;
+    audioPlayer.currentTime = time;
+});
+
+volumeBar.addEventListener('input', () => {
+    audioPlayer.volume = volumeBar.value / 100;
+});
+
+// ==========================================
+// 8. 統計ログの記録とChart.js描画
+// ==========================================
+function startPlaybackLogging(track) {
+    clearInterval(playbackLogTimer);
+    // 10秒ごとにログDBに10秒再生したことを記録する
+    playbackLogTimer = setInterval(() => {
+        if (!audioPlayer.paused) {
+            logPlayback(track, 10);
+        }
+    }, 10000);
+}
+
+function logPlayback(track, seconds) {
+    const transaction = db.transaction(['logs'], 'readwrite');
+    const store = transaction.objectStore('logs');
+    store.add({
+        trackId: track.id,
+        artist: track.artist,
+        date: track.date, // 年代
+        tags: track.tags,
+        durationPlayed: seconds,
+        timestamp: Date.now()
+    });
+    
+    transaction.oncomplete = () => {
+        // リアルタイムでグラフを更新したい場合は呼び出す
+        // updateCharts(); 
+    };
+}
+
+// グラフの初期化と更新 (Chart.js)
+let charts = {};
+
+function initCharts() {
+    const ctxTotal = document.getElementById('chart-total').getContext('2d');
+    charts.total = new Chart(ctxTotal, { type: 'bar', data: { labels: [], datasets: [{ label: '再生時間 (秒)', data: [], backgroundColor: 'rgba(98, 0, 238, 0.5)' }] }});
+    
+    const ctxArtist = document.getElementById('chart-artist').getContext('2d');
+    charts.artist = new Chart(ctxArtist, { type: 'pie', data: { labels: [], datasets: [{ data: [], backgroundColor: ['#6200ee', '#03dac6', '#cf6679', '#bb86fc', '#018786'] }] }});
+}
+
+async function updateCharts() {
+    if (!charts.total) initCharts();
+    
+    // DBからログを集計してグラフに反映させる処理
+    // ※今回はサンプルとして、現在playlistにある曲の長さを元にモックデータを描画します
+    // 本格的な集計はDBの'logs'ストアから期間を指定してフィルタリングします。
+    
+    const artists = {};
+    AppState.playlist.forEach(t => {
+        artists[t.artist] = (artists[t.artist] || 0) + 1;
+    });
+
+    charts.artist.data.labels = Object.keys(artists);
+    charts.artist.data.datasets[0].data = Object.values(artists);
+    charts.artist.update();
+}
+
+// 初期ロード時の実行
+document.addEventListener('DOMContentLoaded', () => {
+    initCharts();
+});
