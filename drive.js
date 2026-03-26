@@ -2,7 +2,7 @@
 // IMPORTANT: Replace with your own Google OAuth2 Client ID
 // Create one at: https://console.cloud.google.com/
 // Enable: Google Drive API, Google Identity Services
-const GOOGLE_CLIENT_ID = window.GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = window.GOOGLE_CLIENT_ID || '966636096862-8hrrm5heb4g5r469veoels7u6ifjguuk.apps.googleusercontent.com';
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
 let tokenClient = null;
