@@ -1,8 +1,7 @@
-/* style.css の :root 部分を以下に差し替えてください */
 :root {
     --bg-color: #f8f9fa;
     --surface-color: #ffffff;
-    --primary-color: #6200ee; /* 白背景に映えるよう少し濃い色に変更 */
+    --primary-color: #87cefa; /* ライトブルー (Light Sky Blue) */
     --text-primary: #212529;
     --text-secondary: #6c757d;
     --danger-color: #dc3545;
@@ -10,6 +9,11 @@
     --hover-color: #e9ecef;
     --nav-width: 240px;
 }
+
+/* プライマリボタンの文字色は黒にして視認性を確保します */
+.btn.primary { background-color: var(--primary-color); color: #000; border: none; }
+/* ブランドロゴの色も少し濃い青にして白背景に合わせます */
+.brand { color: #4682b4; }
 
 
 * {
