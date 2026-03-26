@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Music Player</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1><i class="fa-solid fa-music"></i> Cloud Music Player</h1>
+        <nav>
+            <button onclick="switchView('player-view')" class="nav-btn active" id="btn-player-view">
+                <i class="fa-solid fa-play"></i> プレイヤー
+            </button>
+            <button onclick="switchView('edit-view')" class="nav-btn" id="btn-edit-view">
+                <i class="fa-solid fa-pen-to-square"></i> 編集
+            </button>
+            <button onclick="switchView('log-view')" class="nav-btn" id="btn-log-view">
+                <i class="fa-solid fa-chart-line"></i> ログ
+            </button>
+            <button id="auth-btn" class="auth-btn">
+                <i class="fa-brands fa-google"></i> ログイン
+            </button>
+        </nav>
+    </header>
+
+    <main>
+        <section id="player-view" class="view active">
+            <div class="player-container">
+                <div class="controls">
+                    <audio id="main-audio" controls></audio>
+                </div>
+                <div class="playlist-controls">
+                    <button title="シャッフル"><i class="fa-solid fa-shuffle"></i></button>
+                    <select id="sort-select">
+                        <option value="name_asc">名前 (昇順)</option>
+                        <option value="name_desc">名前 (降順)</option>
+                        <option value="date_asc">追加日 (古い順)</option>
+                        <option value="date_desc">追加日 (新しい順)</option>
+                    </select>
+                </div>
+                <div class="file-upload">
+                    <label for="local-upload" class="upload-btn">
+                        <i class="fa-solid fa-file-arrow-up"></i> ローカルファイルを追加
+                    </label>
+                    <input type="file" id="local-upload" accept="audio/*" multiple style="display: none;">
+                </div>
+                <ul id="playlist" class="playlist">
+                    </ul>
+            </div>
+        </section>
+
+        <section id="edit-view" class="view">
+            <h2><i class="fa-solid fa-sliders"></i> 音声ファイル編集</h2>
+            <p>※後のステップでffmpeg.wasm等を用いて実装します。</p>
+            <div class="edit-controls">
+                </div>
+        </section>
+
+        <section id="log-view" class="view">
+            <h2><i class="fa-solid fa-chart-pie"></i> 再生ログ</h2>
+            <p>※後のステップでChart.jsを用いて実装します。</p>
+            <div class="chart-container">
+                <canvas id="log-chart"></canvas>
+            </div>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
