@@ -3,67 +3,144 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cloud Music Player</title>
+    <title>Web Music Player & Manager</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <header>
-        <h1><i class="fa-solid fa-music"></i> Cloud Music Player</h1>
-        <nav>
-            <button onclick="switchView('player-view')" class="nav-btn active" id="btn-player-view">
-                <i class="fa-solid fa-play"></i> プレイヤー
-            </button>
-            <button onclick="switchView('edit-view')" class="nav-btn" id="btn-edit-view">
-                <i class="fa-solid fa-pen-to-square"></i> 編集
-            </button>
-            <button onclick="switchView('log-view')" class="nav-btn" id="btn-log-view">
-                <i class="fa-solid fa-chart-line"></i> ログ
-            </button>
-            <button id="auth-btn" class="auth-btn">
-                <i class="fa-brands fa-google"></i> ログイン
-            </button>
-        </nav>
-    </header>
+    <nav class="sidebar">
+        <div class="logo">
+            <i class="fa-solid fa-music"></i> AudioApp
+        </div>
+        <ul class="nav-links">
+            <li><a href="#" data-target="player-view" class="active"><i class="fa-solid fa-play"></i> Player</a></li>
+            <li><a href="#" data-target="edit-view"><i class="fa-solid fa-sliders"></i> Edit</a></li>
+            <li><a href="#" data-target="logs-view"><i class="fa-solid fa-chart-line"></i> Logs</a></li>
+        </ul>
+        <div class="auth-section">
+            <button id="auth-btn" class="btn"><i class="fa-brands fa-google"></i> Login to Drive</button>
+            <div id="user-info" class="hidden">
+                <span id="user-name"></span>
+                <button id="logout-btn" class="btn-icon"><i class="fa-solid fa-sign-out-alt"></i></button>
+            </div>
+        </div>
+    </nav>
 
-    <main>
+    <main class="content">
         <section id="player-view" class="view active">
+            <header>
+                <h2><i class="fa-solid fa-play"></i> Player</h2>
+            </header>
+            
             <div class="player-container">
-                <div class="controls">
+                <div class="now-playing">
+                    <div class="thumbnail">
+                        <i class="fa-solid fa-compact-disc fa-4x"></i>
+                    </div>
+                    <h3 id="current-title">No Track Selected</h3>
+                    <p id="current-artist">Unknown Artist</p>
                     <audio id="main-audio" controls></audio>
                 </div>
-                <div class="playlist-controls">
-                    <button title="シャッフル"><i class="fa-solid fa-shuffle"></i></button>
-                    <select id="sort-select">
-                        <option value="name_asc">名前 (昇順)</option>
-                        <option value="name_desc">名前 (降順)</option>
-                        <option value="date_asc">追加日 (古い順)</option>
-                        <option value="date_desc">追加日 (新しい順)</option>
-                    </select>
+
+                <div class="playlist-section">
+                    <div class="playlist-controls">
+                        <select id="sort-select">
+                            <option value="name-asc">Name (A-Z)</option>
+                            <option value="name-desc">Name (Z-A)</option>
+                            <option value="date-asc">Added (Oldest)</option>
+                            <option value="date-desc">Added (Newest)</option>
+                            <option value="length-asc">Length (Shortest)</option>
+                            <option value="length-desc">Length (Longest)</option>
+                        </select>
+                        <button class="btn-icon" id="shuffle-btn"><i class="fa-solid fa-shuffle"></i></button>
+                    </div>
+                    
+                    <div id="drop-zone" class="drop-zone">
+                        <i class="fa-solid fa-cloud-arrow-up fa-2x"></i>
+                        <p>Drag & Drop Audio Files Here<br>or Click to Browse</p>
+                        <input type="file" id="file-input" multiple accept="audio/*" class="hidden">
+                    </div>
+
+                    <ul id="playlist" class="playlist">
+                        </ul>
                 </div>
-                <div class="file-upload">
-                    <label for="local-upload" class="upload-btn">
-                        <i class="fa-solid fa-file-arrow-up"></i> ローカルファイルを追加
-                    </label>
-                    <input type="file" id="local-upload" accept="audio/*" multiple style="display: none;">
-                </div>
-                <ul id="playlist" class="playlist">
-                    </ul>
             </div>
         </section>
 
-        <section id="edit-view" class="view">
-            <h2><i class="fa-solid fa-sliders"></i> 音声ファイル編集</h2>
-            <p>※後のステップでffmpeg.wasm等を用いて実装します。</p>
-            <div class="edit-controls">
+        <section id="edit-view" class="view hidden">
+            <header>
+                <h2><i class="fa-solid fa-sliders"></i> Edit Audio Info</h2>
+            </header>
+            <div class="edit-container">
+                <p>Select a track from the player to edit its metadata, or drop a file here.</p>
+                <div class="form-group">
+                    <label>Title</label>
+                    <input type="text" id="edit-title">
                 </div>
+                <div class="form-group">
+                    <label>Artist</label>
+                    <input type="text" id="edit-artist">
+                </div>
+                <div class="form-group">
+                    <label>Tags (Comma separated)</label>
+                    <input type="text" id="edit-tags">
+                </div>
+                <div class="form-group">
+                    <label>Release Year</label>
+                    <input type="number" id="edit-year">
+                </div>
+                
+                <div class="advanced-edit">
+                    <h3>Advanced Options (Mockup)</h3>
+                    <div class="form-group">
+                        <label>Convert Format</label>
+                        <select id="format-select">
+                            <option value="mp3">MP3</option>
+                            <option value="wav">WAV</option>
+                            <option value="ogg">OGG</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Volume Adjust</label>
+                        <input type="range" min="0" max="2" step="0.1" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Pitch/Key Shift</label>
+                        <input type="range" min="-12" max="12" step="1" value="0">
+                    </div>
+                </div>
+
+                <div class="edit-actions">
+                    <button class="btn"><i class="fa-solid fa-save"></i> Save (Overwrite)</button>
+                    <button class="btn"><i class="fa-solid fa-copy"></i> Save as New</button>
+                    <button class="btn"><i class="fa-solid fa-download"></i> Download</button>
+                </div>
+            </div>
         </section>
 
-        <section id="log-view" class="view">
-            <h2><i class="fa-solid fa-chart-pie"></i> 再生ログ</h2>
-            <p>※後のステップでChart.jsを用いて実装します。</p>
-            <div class="chart-container">
-                <canvas id="log-chart"></canvas>
+        <section id="logs-view" class="view hidden">
+            <header>
+                <h2><i class="fa-solid fa-chart-line"></i> Playback Logs</h2>
+            </header>
+            <div class="logs-container">
+                <div class="chart-controls">
+                    <select id="log-type">
+                        <option value="total">Total Playtime</option>
+                        <option value="artist">By Artist</option>
+                        <option value="tags">By Tags</option>
+                        <option value="year">By Year</option>
+                    </select>
+                    <select id="log-period">
+                        <option value="day">Daily</option>
+                        <option value="week">Weekly</option>
+                        <option value="month">Monthly</option>
+                        <option value="year">Yearly</option>
+                    </select>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="statsChart"></canvas>
+                </div>
             </div>
         </section>
     </main>
