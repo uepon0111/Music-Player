@@ -1,14 +1,16 @@
+/* style.css の :root 部分を以下に差し替えてください */
 :root {
-    --bg-color: #121212;
-    --surface-color: #1e1e1e;
-    --primary-color: #bb86fc;
-    --text-primary: #ffffff;
-    --text-secondary: #b3b3b3;
-    --danger-color: #cf6679;
-    --border-color: #333333;
-    --hover-color: #2a2a2a;
+    --bg-color: #f8f9fa;
+    --surface-color: #ffffff;
+    --primary-color: #6200ee; /* 白背景に映えるよう少し濃い色に変更 */
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --danger-color: #dc3545;
+    --border-color: #dee2e6;
+    --hover-color: #e9ecef;
     --nav-width: 240px;
 }
+
 
 * {
     box-sizing: border-box;
