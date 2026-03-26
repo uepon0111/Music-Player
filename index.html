@@ -25,7 +25,7 @@
         </ul>
         <div class="auth-section">
             <button id="auth-btn" class="btn"><i class="fa-brands fa-google"></i> <span>ログイン</span></button>
-            <div id="auth-status" class="status-text text-offline"><i class="fa-solid fa-cloud-arrow-down"></i> ローカルモード</div>
+            <div id="auth-status" class="status-text text-offline"><i class="fa-solid fa-cloud-arrow-down"></i> ローカル</div>
         </div>
     </nav>
 
@@ -37,7 +37,12 @@
 
         <section id="player-view" class="view-section active">
             <header class="view-header">
-                <h2><i class="fa-solid fa-list"></i> 再生リスト</h2>
+                <div class="header-left">
+                    <h2><i class="fa-solid fa-list"></i> 再生リスト</h2>
+                    <select id="playlist-select" class="playlist-dropdown"></select>
+                    <button id="new-playlist-btn" class="btn icon-btn" title="新しいリスト"><i class="fa-solid fa-folder-plus"></i></button>
+                    <button id="delete-playlist-btn" class="btn icon-btn danger" title="リスト削除"><i class="fa-solid fa-trash"></i></button>
+                </div>
                 <div class="controls-row">
                     <button id="add-file-btn" class="btn primary"><i class="fa-solid fa-plus"></i> ファイル追加</button>
                     <input type="file" id="file-input" accept="audio/*" multiple hidden>
@@ -57,11 +62,10 @@
                 </div>
             </header>
             
-            <ul id="playlist" class="playlist">
-                </ul>
+            <ul id="playlist" class="playlist"></ul>
 
             <div class="player-bar">
-                <img id="current-thumb" src="default-cover.jpg" alt="Cover" class="cover-art">
+                <img id="current-thumb" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23ccc'/></svg>" alt="Cover" class="cover-art">
                 <div class="track-info">
                     <h3 id="current-title">未選択</h3>
                     <p id="current-artist">-</p>
@@ -86,11 +90,17 @@
         <section id="editor-view" class="view-section">
             <header class="view-header">
                 <h2><i class="fa-solid fa-sliders"></i> 音声ファイル情報編集</h2>
+                <div class="editor-top-actions">
+                    <button id="btn-preview" class="btn"><i class="fa-solid fa-play"></i> プレビュー再生</button>
+                    <button id="btn-stop-preview" class="btn"><i class="fa-solid fa-stop"></i> 停止</button>
+                </div>
             </header>
             <div class="editor-container">
                 <div class="editor-sidebar">
-                    <img id="edit-thumb-preview" src="default-cover.jpg" alt="Preview">
-                    <button class="btn"><i class="fa-solid fa-image"></i> サムネイル変更</button>
+                    <img id="edit-thumb-preview" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23ccc'/></svg>" alt="Preview">
+                    <input type="file" id="edit-thumb-input" accept="image/*" hidden>
+                    <button id="btn-change-thumb" class="btn"><i class="fa-solid fa-image"></i> サムネイル変更</button>
+                    <p id="edit-target-name" style="margin-top:10px; font-weight:bold; word-break:break-all;">ファイル未選択</p>
                 </div>
                 <div class="editor-form">
                     <div class="form-group">
@@ -115,24 +125,24 @@
                     <div class="form-group">
                         <label>トリミング (開始 - 終了秒)</label>
                         <div class="range-inputs">
-                            <input type="number" id="edit-trim-start" placeholder="0.0"> <i class="fa-solid fa-minus"></i>
-                            <input type="number" id="edit-trim-end" placeholder="終了">
+                            <input type="number" id="edit-trim-start" placeholder="0.0" step="0.1" min="0"> <i class="fa-solid fa-minus"></i>
+                            <input type="number" id="edit-trim-end" placeholder="終了" step="0.1" min="0">
                         </div>
                     </div>
                     <div class="form-group">
                         <label>音量調整 (%)</label>
                         <input type="range" id="edit-volume" min="0" max="200" value="100">
+                        <span id="edit-volume-val">100%</span>
                     </div>
                     <div class="form-group">
-                        <label>キー変更 (半角音)</label>
+                        <label>キー変更 (半角音) ※プレビュー・変換用</label>
                         <input type="number" id="edit-key" min="-12" max="12" value="0">
                     </div>
                     <div class="form-group">
-                        <label>拡張子変換</label>
+                        <label>拡張子変換 (ダウンロード時)</label>
                         <select id="edit-format">
                             <option value="original">元のまま</option>
-                            <option value="mp3">MP3</option>
-                            <option value="wav">WAV</option>
+                            <option value="wav">WAVに変換</option>
                         </select>
                     </div>
                     
@@ -148,13 +158,6 @@
         <section id="log-view" class="view-section">
             <header class="view-header">
                 <h2><i class="fa-solid fa-chart-line"></i> 統計ログ</h2>
-                <select id="stats-period">
-                    <option value="day">日別</option>
-                    <option value="week">週別</option>
-                    <option value="month">月別</option>
-                    <option value="year">年別</option>
-                    <option value="all">累計</option>
-                </select>
             </header>
             <div class="charts-grid">
                 <div class="chart-card">
@@ -164,14 +167,6 @@
                 <div class="chart-card">
                     <h3>作者別</h3>
                     <canvas id="chart-artist"></canvas>
-                </div>
-                <div class="chart-card">
-                    <h3>タグ別</h3>
-                    <canvas id="chart-tags"></canvas>
-                </div>
-                <div class="chart-card">
-                    <h3>年代別</h3>
-                    <canvas id="chart-decade"></canvas>
                 </div>
             </div>
         </section>
