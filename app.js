@@ -1,6 +1,6 @@
 /**
  * app.js - Web Music Player
- * 第2弾: 情報編集機能（リスト選択、カラフルな複数タグ、メタデータ保存）
+ * 第3弾: メタ情報の自動読み込み、タグ色変更機能、初期値空欄化
  */
 
 const DB_NAME = 'MusicPlayerDB';
@@ -12,8 +12,8 @@ const appState = {
     playlists: [],
     currentTrack: null,
     isPlaying: false,
-    editingTrackId: null, // 現在編集中の曲ID
-    editingTags: []       // 編集中のタグ一覧
+    editingTrackId: null,
+    editingTags: [] // {text: "タグ名", color: "#RRGGBB"} の形式で保存
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -74,26 +74,66 @@ function initDragAndDrop() {
     });
 }
 
+// 音声ファイルからメタ情報を抽出する関数 (jsmediatagsを使用)
+function readAudioTags(file) {
+    return new Promise((resolve) => {
+        if (typeof window.jsmediatags === 'undefined') {
+            resolve({ title: null, artist: null, picture: null });
+            return;
+        }
+        window.jsmediatags.read(file, {
+            onSuccess: function(tag) {
+                let tags = tag.tags;
+                let pictureUrl = null;
+                // サムネイル画像が存在する場合
+                if (tags.picture) {
+                    try {
+                        let data = tags.picture.data;
+                        let format = tags.picture.format;
+                        let base64String = "";
+                        for (let i = 0; i < data.length; i++) {
+                            base64String += String.fromCharCode(data[i]);
+                        }
+                        pictureUrl = `data:${format};base64,${window.btoa(base64String)}`;
+                    } catch(e) { console.error("画像読み込みエラー", e); }
+                }
+                resolve({
+                    title: tags.title || null,
+                    artist: tags.artist || null,
+                    picture: pictureUrl
+                });
+            },
+            onError: function() {
+                resolve({ title: null, artist: null, picture: null });
+            }
+        });
+    });
+}
+
 async function handleFiles(files) {
     if (!files || files.length === 0) return;
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
         if (!file.type.startsWith('audio/')) continue;
 
+        // メタ情報を取得（少し時間がかかるのでawaitで待機）
+        const meta = await readAudioTags(file);
+
         const newTrack = {
             id: 'track_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
             fileBlob: file,
             fileName: file.name,
-            title: file.name.replace(/\.[^/.]+$/, ""),
-            artist: "不明なアーティスト",
-            date: new Date().toISOString().split('T')[0],
+            title: meta.title || file.name.replace(/\.[^/.]+$/, ""), // 取得できればメタ情報のタイトル
+            artist: meta.artist || "不明なアーティスト", // 取得できればメタ情報のアーティスト
+            date: "", // 投稿日は初期値で空欄にする
             tags: [],
-            thumbnailDataUrl: null,
+            thumbnailDataUrl: meta.picture || null, // サムネイルがあれば設定
             addedAt: Date.now()
         };
         await saveTrackToDB(newTrack);
     }
     await loadLibrary();
+    alert('ファイルの追加が完了しました。');
 }
 
 function saveTrackToDB(track) {
@@ -119,10 +159,9 @@ function getAllTracksFromDB() {
 async function loadLibrary() {
     appState.tracks = await getAllTracksFromDB();
     renderLibraryList(appState.tracks);
-    renderEditLibraryList(appState.tracks); // 編集用リストも更新
+    renderEditLibraryList(appState.tracks);
 }
 
-// マイライブラリの描画
 function renderLibraryList(tracks) {
     const libraryList = document.getElementById('my-library-list');
     libraryList.innerHTML = '';
@@ -133,39 +172,44 @@ function renderLibraryList(tracks) {
         li.style.padding = '10px'; li.style.borderBottom = '1px solid var(--border-color)';
         li.style.display = 'flex'; li.style.alignItems = 'center'; li.style.gap = '10px'; li.style.cursor = 'pointer';
 
-        const icon = document.createElement('span');
-        icon.className = 'material-symbols-outlined';
-        icon.textContent = track.thumbnailDataUrl ? 'image' : 'audio_file';
+        // サムネイルがあれば画像を表示、なければアイコン
+        if (track.thumbnailDataUrl) {
+            const img = document.createElement('img');
+            img.src = track.thumbnailDataUrl;
+            img.style.width = '30px'; img.style.height = '30px';
+            img.style.borderRadius = '4px'; img.style.objectFit = 'cover';
+            li.appendChild(img);
+        } else {
+            const icon = document.createElement('span');
+            icon.className = 'material-symbols-outlined';
+            icon.textContent = 'audio_file';
+            icon.style.color = 'var(--text-secondary)';
+            li.appendChild(icon);
+        }
         
         const info = document.createElement('div');
         info.innerHTML = `<div style="font-weight:bold; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${track.title}</div>
                           <div style="font-size:12px; color:var(--text-secondary);">${track.artist}</div>`;
 
-        li.appendChild(icon); li.appendChild(info);
+        li.appendChild(info);
         libraryList.appendChild(li);
     });
 }
 
-// --- ★新機能: 編集用リストとメタデータ編集処理 ---
-
 function renderEditLibraryList(tracks) {
     const list = document.getElementById('edit-library-list');
     list.innerHTML = '';
-    
     tracks.forEach(track => {
         const li = document.createElement('li');
         li.style.padding = '8px'; li.style.borderBottom = '1px solid var(--border-color)';
         li.style.cursor = 'pointer'; li.style.fontSize = '14px';
         li.textContent = track.title;
-        
-        li.addEventListener('click', () => {
-            openEditForm(track);
-        });
+        li.addEventListener('click', () => openEditForm(track));
         list.appendChild(li);
     });
 }
 
-// 編集フォームにデータをセット
+// フォームにデータをセット
 function openEditForm(track) {
     document.getElementById('edit-form-area').style.display = 'flex';
     appState.editingTrackId = track.id;
@@ -174,10 +218,12 @@ function openEditForm(track) {
     document.getElementById('edit-artist').value = track.artist || '';
     document.getElementById('edit-date').value = track.date || '';
     
-    appState.editingTags = [...(track.tags || [])];
+    // タグデータが古い形式（文字列）の場合は新しい形式（オブジェクト）に変換
+    appState.editingTags = (track.tags || []).map(t => {
+        return typeof t === 'string' ? { text: t, color: getTagColorHex(t) } : t;
+    });
     renderEditTags();
 
-    // サムネイルの表示
     const preview = document.getElementById('edit-thumbnail-preview');
     if (track.thumbnailDataUrl) {
         preview.style.backgroundImage = `url(${track.thumbnailDataUrl})`;
@@ -188,47 +234,41 @@ function openEditForm(track) {
     }
 }
 
-// タグの色を文字から自動生成する関数（パステルカラー）
-function getTagColor(str) {
+// 文字列からランダムなHEXカラーを生成する関数（カラーピッカー用）
+function getTagColorHex(str) {
     let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-        hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const h = Math.abs(hash) % 360;
-    return `hsl(${h}, 70%, 85%)`; // HSLで明るいパステルカラーを生成
+    for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+    return "#" + "00000".substring(0, 6 - c.length) + c;
 }
 
 function initEditPage() {
     const tagInput = document.getElementById('edit-tags-input');
     
-    // Enterキーでタグ追加
     tagInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
             const tagText = tagInput.value.trim();
-            if (tagText && !appState.editingTags.includes(tagText)) {
-                appState.editingTags.push(tagText);
+            // 重複チェック
+            if (tagText && !appState.editingTags.find(t => t.text === tagText)) {
+                // 初期色は自動生成したものをセット
+                appState.editingTags.push({ text: tagText, color: getTagColorHex(tagText) });
                 renderEditTags();
                 tagInput.value = '';
             }
         }
     });
 
-    // 保存ボタンの処理
     document.getElementById('save-metadata-btn').addEventListener('click', async () => {
         if (!appState.editingTrackId) return;
-        
-        // 元の曲データを取得
         const track = appState.tracks.find(t => t.id === appState.editingTrackId);
         if (!track) return;
 
-        // 入力内容で上書き
         track.title = document.getElementById('edit-title').value;
         track.artist = document.getElementById('edit-artist').value;
         track.date = document.getElementById('edit-date').value;
-        track.tags = [...appState.editingTags];
+        track.tags = [...appState.editingTags]; // 色情報付きのタグオブジェクト配列を保存
 
-        // データベースに保存して再描画
         await saveTrackToDB(track);
         await loadLibrary();
         alert('情報を保存しました！');
@@ -239,20 +279,35 @@ function renderEditTags() {
     const list = document.getElementById('edit-tags-list');
     list.innerHTML = '';
     
-    appState.editingTags.forEach((tag, index) => {
+    appState.editingTags.forEach((tagObj, index) => {
         const span = document.createElement('span');
         span.className = 'tag-item';
-        span.style.backgroundColor = getTagColor(tag); // 文字から自動で色を付ける
-        span.innerHTML = `${tag} <span class="material-symbols-outlined remove-tag" data-index="${index}">close</span>`;
+        span.style.backgroundColor = tagObj.color; // 選択された色を適用
+        
+        // タグ名、カラーピッカー、削除ボタンを配置
+        span.innerHTML = `
+            ${tagObj.text} 
+            <input type="color" class="tag-color-picker" value="${tagObj.color}" data-index="${index}" title="色を変更">
+            <span class="material-symbols-outlined remove-tag" data-index="${index}">close</span>
+        `;
         list.appendChild(span);
     });
 
-    // 削除ボタンのイベント
+    // 削除イベント
     document.querySelectorAll('.remove-tag').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const index = e.target.getAttribute('data-index');
             appState.editingTags.splice(index, 1);
             renderEditTags();
+        });
+    });
+
+    // 色変更（カラーピッカー）イベント：色を選んだ瞬間にタグの背景色を変える
+    document.querySelectorAll('.tag-color-picker').forEach(picker => {
+        picker.addEventListener('input', (e) => {
+            const index = e.target.getAttribute('data-index');
+            appState.editingTags[index].color = e.target.value; // 色情報を更新
+            e.target.parentElement.style.backgroundColor = e.target.value; // 見た目を即反映
         });
     });
 }
