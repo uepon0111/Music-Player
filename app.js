@@ -1,6 +1,6 @@
 /**
  * app.js - Web Music Player
- * 第3弾: メタ情報の自動読み込み、タグ色変更機能、初期値空欄化
+ * 第4弾: レスポンシブ対応、タグデザインの修正
  */
 
 const DB_NAME = 'MusicPlayerDB';
@@ -13,7 +13,7 @@ const appState = {
     currentTrack: null,
     isPlaying: false,
     editingTrackId: null,
-    editingTags: [] // {text: "タグ名", color: "#RRGGBB"} の形式で保存
+    editingTags: [] // {text: "タグ名", color: "#RRGGBB"} 
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -74,7 +74,6 @@ function initDragAndDrop() {
     });
 }
 
-// 音声ファイルからメタ情報を抽出する関数 (jsmediatagsを使用)
 function readAudioTags(file) {
     return new Promise((resolve) => {
         if (typeof window.jsmediatags === 'undefined') {
@@ -85,7 +84,6 @@ function readAudioTags(file) {
             onSuccess: function(tag) {
                 let tags = tag.tags;
                 let pictureUrl = null;
-                // サムネイル画像が存在する場合
                 if (tags.picture) {
                     try {
                         let data = tags.picture.data;
@@ -116,18 +114,17 @@ async function handleFiles(files) {
         const file = files[i];
         if (!file.type.startsWith('audio/')) continue;
 
-        // メタ情報を取得（少し時間がかかるのでawaitで待機）
         const meta = await readAudioTags(file);
 
         const newTrack = {
             id: 'track_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
             fileBlob: file,
             fileName: file.name,
-            title: meta.title || file.name.replace(/\.[^/.]+$/, ""), // 取得できればメタ情報のタイトル
-            artist: meta.artist || "不明なアーティスト", // 取得できればメタ情報のアーティスト
-            date: "", // 投稿日は初期値で空欄にする
+            title: meta.title || file.name.replace(/\.[^/.]+$/, ""),
+            artist: meta.artist || "不明なアーティスト",
+            date: "", 
             tags: [],
-            thumbnailDataUrl: meta.picture || null, // サムネイルがあれば設定
+            thumbnailDataUrl: meta.picture || null,
             addedAt: Date.now()
         };
         await saveTrackToDB(newTrack);
@@ -172,7 +169,6 @@ function renderLibraryList(tracks) {
         li.style.padding = '10px'; li.style.borderBottom = '1px solid var(--border-color)';
         li.style.display = 'flex'; li.style.alignItems = 'center'; li.style.gap = '10px'; li.style.cursor = 'pointer';
 
-        // サムネイルがあれば画像を表示、なければアイコン
         if (track.thumbnailDataUrl) {
             const img = document.createElement('img');
             img.src = track.thumbnailDataUrl;
@@ -209,7 +205,6 @@ function renderEditLibraryList(tracks) {
     });
 }
 
-// フォームにデータをセット
 function openEditForm(track) {
     document.getElementById('edit-form-area').style.display = 'flex';
     appState.editingTrackId = track.id;
@@ -218,7 +213,6 @@ function openEditForm(track) {
     document.getElementById('edit-artist').value = track.artist || '';
     document.getElementById('edit-date').value = track.date || '';
     
-    // タグデータが古い形式（文字列）の場合は新しい形式（オブジェクト）に変換
     appState.editingTags = (track.tags || []).map(t => {
         return typeof t === 'string' ? { text: t, color: getTagColorHex(t) } : t;
     });
@@ -234,7 +228,6 @@ function openEditForm(track) {
     }
 }
 
-// 文字列からランダムなHEXカラーを生成する関数（カラーピッカー用）
 function getTagColorHex(str) {
     let hash = 0;
     for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
@@ -249,9 +242,7 @@ function initEditPage() {
         if (e.key === 'Enter') {
             e.preventDefault();
             const tagText = tagInput.value.trim();
-            // 重複チェック
             if (tagText && !appState.editingTags.find(t => t.text === tagText)) {
-                // 初期色は自動生成したものをセット
                 appState.editingTags.push({ text: tagText, color: getTagColorHex(tagText) });
                 renderEditTags();
                 tagInput.value = '';
@@ -267,7 +258,7 @@ function initEditPage() {
         track.title = document.getElementById('edit-title').value;
         track.artist = document.getElementById('edit-artist').value;
         track.date = document.getElementById('edit-date').value;
-        track.tags = [...appState.editingTags]; // 色情報付きのタグオブジェクト配列を保存
+        track.tags = [...appState.editingTags];
 
         await saveTrackToDB(track);
         await loadLibrary();
@@ -275,6 +266,7 @@ function initEditPage() {
     });
 }
 
+// ★修正: タグ全体の背景色を変えず、カラーピッカーのアイコンだけが変わるようにしました
 function renderEditTags() {
     const list = document.getElementById('edit-tags-list');
     list.innerHTML = '';
@@ -282,9 +274,8 @@ function renderEditTags() {
     appState.editingTags.forEach((tagObj, index) => {
         const span = document.createElement('span');
         span.className = 'tag-item';
-        span.style.backgroundColor = tagObj.color; // 選択された色を適用
+        // span.style.backgroundColor = tagObj.color; <- ここを削除しました
         
-        // タグ名、カラーピッカー、削除ボタンを配置
         span.innerHTML = `
             ${tagObj.text} 
             <input type="color" class="tag-color-picker" value="${tagObj.color}" data-index="${index}" title="色を変更">
@@ -293,7 +284,6 @@ function renderEditTags() {
         list.appendChild(span);
     });
 
-    // 削除イベント
     document.querySelectorAll('.remove-tag').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const index = e.target.getAttribute('data-index');
@@ -302,12 +292,11 @@ function renderEditTags() {
         });
     });
 
-    // 色変更（カラーピッカー）イベント：色を選んだ瞬間にタグの背景色を変える
+    // カラーピッカーの値が変更されたらデータだけを更新し、背景色は変えない
     document.querySelectorAll('.tag-color-picker').forEach(picker => {
         picker.addEventListener('input', (e) => {
             const index = e.target.getAttribute('data-index');
-            appState.editingTags[index].color = e.target.value; // 色情報を更新
-            e.target.parentElement.style.backgroundColor = e.target.value; // 見た目を即反映
+            appState.editingTags[index].color = e.target.value; 
         });
     });
 }
