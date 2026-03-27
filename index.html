@@ -56,8 +56,7 @@
                             <span class="material-symbols-outlined">search</span>
                             <input type="text" id="library-search" placeholder="タイトル, アーティスト, タグ検索">
                         </div>
-                        <ul id="my-library-list" class="item-list">
-                            </ul>
+                        <ul id="my-library-list" class="item-list"></ul>
                     </div>
 
                     <div class="sidebar-section">
@@ -67,8 +66,7 @@
                                 <span class="material-symbols-outlined">playlist_add</span>
                             </button>
                         </div>
-                        <div id="playlists-container" class="item-list">
-                            </div>
+                        <div id="playlists-container" class="item-list"></div>
                     </div>
                 </aside>
 
@@ -87,8 +85,7 @@
                             <button class="icon-btn" id="btn-shuffle" title="ランダム再生"><span class="material-symbols-outlined">shuffle</span></button>
                         </div>
                     </div>
-                    <ul id="current-playlist-items" class="track-list">
-                        </ul>
+                    <ul id="current-playlist-items" class="track-list"></ul>
                 </div>
             </div>
         </section>
@@ -97,44 +94,52 @@
             <div class="edit-container">
                 <div class="edit-header">
                     <h2><span class="material-symbols-outlined">tune</span> メタデータ編集</h2>
-                    <p>ライブラリから曲を選択して情報を編集します。</p>
+                    <p>左側のリストから曲を選択して情報を編集します。</p>
                 </div>
                 
                 <div class="edit-layout">
-                    <div class="edit-thumbnail-section">
-                        <div class="thumbnail-preview" id="edit-thumbnail-preview">
-                            <span class="material-symbols-outlined">image</span>
-                        </div>
-                        <label class="secondary-btn">
-                            <span class="material-symbols-outlined">add_photo_alternate</span> サムネイルを変更
-                            <input type="file" id="edit-thumbnail-input" accept="image/*" style="display: none;">
-                        </label>
+                    <div class="edit-sidebar">
+                        <h3>編集する曲を選択</h3>
+                        <ul id="edit-library-list" class="item-list">
+                            </ul>
                     </div>
 
-                    <div class="edit-form-section">
-                        <div class="form-group">
-                            <label>タイトル</label>
-                            <input type="text" id="edit-title" placeholder="曲のタイトル">
-                        </div>
-                        <div class="form-group">
-                            <label>アーティスト</label>
-                            <input type="text" id="edit-artist" placeholder="アーティスト名">
-                        </div>
-                        <div class="form-group">
-                            <label>投稿日 (年-月-日)</label>
-                            <input type="date" id="edit-date">
-                        </div>
-                        <div class="form-group">
-                            <label>タグ</label>
-                            <div class="tags-input-container">
-                                <input type="text" id="edit-tags-input" placeholder="タグを入力してEnter">
-                                <div id="edit-tags-list" class="tags-list"></div>
+                    <div class="edit-main-area" id="edit-form-area" style="display: none;">
+                        <div class="edit-thumbnail-section">
+                            <div class="thumbnail-preview" id="edit-thumbnail-preview">
+                                <span class="material-symbols-outlined">image</span>
                             </div>
+                            <label class="secondary-btn">
+                                <span class="material-symbols-outlined">add_photo_alternate</span> サムネイルを変更
+                                <input type="file" id="edit-thumbnail-input" accept="image/*" style="display: none;">
+                            </label>
                         </div>
-                        <div class="form-actions">
-                            <button id="save-metadata-btn" class="primary-btn">
-                                <span class="material-symbols-outlined">save</span> 保存する
-                            </button>
+
+                        <div class="edit-form-section">
+                            <div class="form-group">
+                                <label>タイトル</label>
+                                <input type="text" id="edit-title" placeholder="曲のタイトル">
+                            </div>
+                            <div class="form-group">
+                                <label>アーティスト</label>
+                                <input type="text" id="edit-artist" placeholder="アーティスト名">
+                            </div>
+                            <div class="form-group">
+                                <label>投稿日 (年-月-日)</label>
+                                <input type="date" id="edit-date">
+                            </div>
+                            <div class="form-group">
+                                <label>タグ (複数追加可能)</label>
+                                <div class="tags-input-container">
+                                    <input type="text" id="edit-tags-input" placeholder="タグを入力してEnterを押す">
+                                    <div id="edit-tags-list" class="tags-list"></div>
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button id="save-metadata-btn" class="primary-btn">
+                                    <span class="material-symbols-outlined">save</span> 保存する
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -153,7 +158,7 @@
                     </select>
                 </div>
                 
-                <div class="stats-cards">
+                <div class="stats-grid">
                     <div class="stat-card">
                         <h3>総再生時間</h3>
                         <p id="stat-total-time">0時間0分</p>
@@ -161,6 +166,18 @@
                     <div class="stat-card">
                         <h3>最も聴いたタグ</h3>
                         <p id="stat-top-tag">-</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>最も聴いた曲</h3>
+                        <p id="stat-top-track">-</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>トップアーティスト</h3>
+                        <p id="stat-top-artist">-</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>よく聴く年代</h3>
+                        <p id="stat-top-decade">-</p>
                     </div>
                 </div>
 
