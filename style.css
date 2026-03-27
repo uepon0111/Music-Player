@@ -202,3 +202,40 @@ body { background-color: var(--bg-main); color: var(--text-primary); display: fl
     border: 1px solid var(--border-color);
     color: var(--text-secondary);
 }
+/* =========================================================
+   ★ 第6弾追加・修正分：タグデザインの微調整（省略・サイズ）
+   ========================================================= */
+
+/* 編集画面のタグの角丸を調整（左端のラインを綺麗に見せるため） */
+.tag-item {
+    max-width: 100%;
+    border-radius: 4px 16px 16px 4px; 
+}
+
+/* ★追加：タグの文字部分（長すぎる場合は...で省略） */
+.tag-text {
+    max-width: 120px; /* ここで長さを制限 */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* カラーピッカーのサイズを小さく */
+.tag-color-picker {
+    width: 14px !important;
+    height: 14px !important;
+    flex-shrink: 0; /* 潰れないように固定 */
+}
+
+/* プレイヤー画面（曲リスト）のタグの調整 */
+.track-list-tag {
+    display: inline-block;
+    border-radius: 4px 10px 10px 4px; /* 左端のラインを綺麗に見せる */
+    max-width: 120px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+}
