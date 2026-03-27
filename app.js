@@ -2,7 +2,7 @@
  * app.js - Web Music Player
  */
 
-// ★ 設定箇所はここ1つだけです。取得したクライアントIDに書き換えてください。
+// ★ 取得したクライアントIDを貼り付けてください。
 const GOOGLE_CLIENT_ID = '963318517208-gjqi9k8d5v6qr8hk1a4jm54cpdc2i03q.apps.googleusercontent.com';
 
 const SYNC_FOLDER_NAME = 'WebMusicPlayer_Sync'; // Drive内に作成されるフォルダ名
@@ -36,8 +36,25 @@ const appState = {
 
     isLoggedIn: false,
     user: null,
-    isSyncing: false // 同期処理中のフラグ
+    isSyncing: false
 };
+
+// ==========================================
+// 自動同期用のヘルパー関数
+// ==========================================
+let syncTimeout = null;
+function triggerAutoSync() {
+    // ログインしていない、または既に同期中の場合はスキップ
+    if (!appState.isLoggedIn) return;
+    
+    // 連続して呼ばれた場合にAPIを叩きすぎないよう、最後の呼び出しから2秒待ってから実行
+    if (syncTimeout) clearTimeout(syncTimeout);
+    syncTimeout = setTimeout(() => {
+        if (!appState.isSyncing) {
+            performDriveSync();
+        }
+    }, 2000);
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
     initNavigation();
@@ -87,22 +104,18 @@ function initNavigation() {
 function initAuthUI() {
     const btnLogin = document.getElementById('btn-login');
     const btnLogout = document.getElementById('btn-logout');
-    const btnSync = document.getElementById('btn-sync');
 
     btnLogin.addEventListener('click', () => {
-        // IDが設定されているかのチェック
         if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID === 'ここにクライアントIDを貼り付けてください') {
             alert('コードの1行目にある GOOGLE_CLIENT_ID をご自身のものに書き換えてください。');
             return;
         }
 
-        // Google APIが読み込まれるまで待機
         if (typeof google === 'undefined' || !google.accounts) {
             alert('Google認証システムを読み込み中です。数秒待ってから再度クリックしてください。');
             return;
         }
 
-        // tokenClientが未作成なら初期化する
         if (!tokenClient) {
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: GOOGLE_CLIENT_ID,
@@ -131,10 +144,6 @@ function initAuthUI() {
         appState.user = null;
         updateAuthUIDisplay();
     });
-
-    btnSync.addEventListener('click', () => {
-        if (!appState.isSyncing) performDriveSync();
-    });
 }
 
 function fetchUserInfo(token) {
@@ -146,6 +155,8 @@ function fetchUserInfo(token) {
         appState.user = data;
         updateAuthUIDisplay();
         console.log("ログイン成功。Drive連携準備完了。");
+        // ログイン成功時に自動同期を実行
+        triggerAutoSync();
     })
     .catch(err => console.error('ユーザー情報取得エラー:', err));
 }
@@ -169,19 +180,13 @@ function updateAuthUIDisplay() {
 async function performDriveSync() {
     if (!gapiAccessToken) return;
     
-    const btnSync = document.getElementById('btn-sync');
-    const syncText = document.getElementById('sync-text');
-    
+    const syncStatus = document.getElementById('sync-status');
     appState.isSyncing = true;
-    syncText.textContent = "同期中...";
-    btnSync.style.opacity = "0.7";
-    btnSync.style.cursor = "wait";
+    if (syncStatus) syncStatus.textContent = "同期中...";
 
     try {
-        // 1. 同期用フォルダのIDを取得（なければ作成）
         const folderId = await getOrCreateSyncFolder();
         
-        // 2. 音声ファイルのアップロード（未アップロードのもののみ）
         let uploadedCount = 0;
         for (let track of appState.tracks) {
             if (track.fileBlob && !track.driveFileId) {
@@ -194,10 +199,9 @@ async function performDriveSync() {
             }
         }
 
-        // 3. JSONファイル（曲情報＋プレイリスト情報）の生成とアップロード
         const syncData = {
             tracks: appState.tracks.map(t => {
-                const { fileBlob, ...rest } = t; // Blob自体は除外して保存
+                const { fileBlob, ...rest } = t; 
                 return rest;
             }),
             playlists: appState.playlists,
@@ -210,16 +214,21 @@ async function performDriveSync() {
         const existingJsonId = await findDriveFile('library_sync.json', 'application/json', folderId);
         await uploadFileToDrive(jsonBlob, 'library_sync.json', 'application/json', folderId, existingJsonId);
 
-        alert(`同期が完了しました！\n（新規アップロード: ${uploadedCount}曲）`);
+        console.log(`自動同期完了 (新規アップロード: ${uploadedCount}曲)`);
+        if (syncStatus) syncStatus.textContent = "同期完了";
+        
+        // 3秒後に「同期完了」の文字を消す
+        setTimeout(() => {
+            if (syncStatus && syncStatus.textContent === "同期完了") {
+                syncStatus.textContent = "";
+            }
+        }, 3000);
 
     } catch (error) {
         console.error("同期エラー:", error);
-        alert("同期中にエラーが発生しました。コンソールを確認してください。");
+        if (syncStatus) syncStatus.textContent = "同期エラー";
     } finally {
         appState.isSyncing = false;
-        syncText.textContent = "Driveと同期";
-        btnSync.style.opacity = "1";
-        btnSync.style.cursor = "pointer";
     }
 }
 
@@ -412,6 +421,10 @@ function initPlayerControls() {
     const nextBtn = document.getElementById('ctrl-next');
     const seekBar = document.getElementById('seek-bar');
     const volumeBar = document.getElementById('volume-bar');
+    const fileInput = document.getElementById('file-upload'); // File upload via click on dropzone handled elsewhere, but keeping just in case.
+
+    const dropZone = document.getElementById('drop-zone');
+    dropZone.addEventListener('click', () => fileInput.click());
 
     playBtn.addEventListener('click', togglePlay);
     nextBtn.addEventListener('click', playNext);
@@ -570,6 +583,8 @@ async function handleFiles(files) {
         await saveTrackToDB(newTrack);
     }
     await loadLibrary();
+    // ファイル追加完了後に自動同期
+    triggerAutoSync();
 }
 
 function saveTrackToDB(track) {
@@ -654,6 +669,7 @@ function saveManualOrder() {
             pl.trackIds = appState.currentQueue.map(t => t.id);
             const tx = db.transaction(['playlists'], 'readwrite');
             tx.objectStore('playlists').put(pl);
+            tx.oncomplete = () => triggerAutoSync(); // 順番変更を同期
         }
     } else {
         if (!appState.searchQueryMain) {
@@ -664,6 +680,7 @@ function saveManualOrder() {
                 t.sortOrder = i;
                 store.put(t);
             });
+            tx.oncomplete = () => triggerAutoSync(); // 順番変更を同期
         }
     }
 }
@@ -905,6 +922,7 @@ async function deleteTracksCompletely(trackIds) {
         appState.selectedEditTracks.clear();
         await loadPlaylists();
         await loadLibrary();
+        triggerAutoSync(); // 削除後に自動同期
     };
 }
 
@@ -915,7 +933,11 @@ function initPlaylists() {
         const newList = { id: 'pl_' + Date.now(), name: name, trackIds: [] };
         const transaction = db.transaction(['playlists'], 'readwrite');
         transaction.objectStore('playlists').put(newList);
-        await loadPlaylists();
+        
+        transaction.oncomplete = async () => {
+            await loadPlaylists();
+            triggerAutoSync(); // 作成後に自動同期
+        };
     });
 }
 
@@ -1015,10 +1037,7 @@ async function addTracksToPlaylist(playlistId, trackIdsArray) {
         }
     });
 
-    if (addedCount === 0) {
-        alert("すでにすべての曲がリストに追加されています。");
-        return;
-    }
+    if (addedCount === 0) return;
 
     const transaction = db.transaction(['playlists'], 'readwrite');
     transaction.objectStore('playlists').put(pl);
@@ -1027,7 +1046,7 @@ async function addTracksToPlaylist(playlistId, trackIdsArray) {
         appState.selectedMainTracks.clear();
         await loadPlaylists(); 
         if (appState.currentPlaylistId === playlistId) updateMainQueue();
-        alert(`「${pl.name}」に ${addedCount}曲 追加しました！`);
+        triggerAutoSync(); // 追加後に自動同期
     };
 }
 
@@ -1046,6 +1065,7 @@ async function removeTracksFromPlaylist(playlistId, trackIdsArray) {
         appState.selectedMainTracks.clear();
         await loadPlaylists();
         updateMainQueue();
+        triggerAutoSync(); // 外した後に自動同期
     };
 }
 
@@ -1062,6 +1082,7 @@ async function deletePlaylist(playlistId, playlistName) {
             document.getElementById('current-playlist-name').textContent = "マイライブラリ (すべて)";
             updateMainQueue();
         }
+        triggerAutoSync(); // リスト削除後に自動同期
     };
 }
 
@@ -1244,10 +1265,10 @@ function initEditPage() {
 
         transaction.oncomplete = async () => {
             await loadLibrary(); 
-            alert(`${appState.selectedEditTracks.size}曲の情報を保存しました！`);
             appState.selectedEditTracks.clear();
             renderEditLibraryList();
             clearEditForm();
+            triggerAutoSync(); // 編集保存後に自動同期
         };
     });
 }
