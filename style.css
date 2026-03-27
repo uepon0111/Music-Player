@@ -175,3 +175,4 @@ body { background-color: var(--bg-main); color: var(--text-primary); display: fl
     .progress-container { max-width: 100%; }
     .track-actions { opacity: 1; }
 }
+
