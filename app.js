@@ -136,9 +136,9 @@ async function handleFiles(files) {
             artist: "不明なアーティスト",
             date: new Date().toISOString().split('T')[0],
             tags: [],
-            thumbnailDataUrl: null,   // サムネイル画像（後で編集ページから追加）
+            thumbnailDataUrl: null,   // サムネイル画像
             volume: 100,              // 再生時の音量補正(%)
-            addedAt: Date.now()       // 追加日時（ソート用）
+            addedAt: Date.now()       // 追加日時
         };
 
         await saveTrackToDB(newTrack);
@@ -187,7 +187,7 @@ function renderLibraryList(tracks) {
         return;
     }
 
-    // 追加日時が新しい順に並べ替えて表示（仮）
+    // 追加日時が新しい順に並べ替えて表示
     const sortedTracks = [...tracks].sort((a, b) => b.addedAt - a.addedAt);
 
     sortedTracks.forEach(track => {
@@ -201,7 +201,7 @@ function renderLibraryList(tracks) {
 
         const icon = document.createElement('span');
         icon.className = 'material-symbols-outlined';
-        icon.textContent = track.thumbnailDataUrl ? 'image' : 'audio_file'; // サムネイルがあれば後で画像に変更
+        icon.textContent = track.thumbnailDataUrl ? 'image' : 'audio_file';
         icon.style.color = 'var(--text-secondary)';
 
         const info = document.createElement('div');
@@ -227,10 +227,8 @@ function renderLibraryList(tracks) {
         li.appendChild(icon);
         li.appendChild(info);
 
-        // クリックで情報編集ページにデータを送るなどの処理を後で追加
         li.addEventListener('click', () => {
             console.log('選択された曲:', track.title);
-            // ※次回ここに、再生や編集ページへのデータ連携処理を書きます
         });
 
         libraryList.appendChild(li);
