@@ -11,7 +11,9 @@
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Helvetica Neue', Arial, sans-serif; }
+
 body { background-color: var(--bg-main); color: var(--text-primary); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
 .material-symbols-outlined { font-size: 24px; display: inline-block; vertical-align: middle; }
 
 /* ヘッダー */
@@ -30,6 +32,7 @@ body { background-color: var(--bg-main); color: var(--text-primary); display: fl
 .primary-btn:hover { background-color: var(--accent-hover); }
 .secondary-btn { background-color: var(--bg-surface); border: 1px solid var(--border-color); color: var(--text-primary); }
 .secondary-btn:hover { background-color: var(--bg-hover); }
+.control-select { padding: 6px 12px; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--bg-main); color: var(--text-primary); outline: none; }
 
 /* メインコンテンツ */
 .main-content { flex: 1; position: relative; padding-bottom: var(--player-height); overflow: hidden; }
@@ -41,13 +44,14 @@ body { background-color: var(--bg-main); color: var(--text-primary); display: fl
 .sidebar { width: 320px; background-color: var(--bg-surface); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 20px; gap: 24px; overflow-y: auto; }
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .section-header h2 { font-size: 14px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
-.drop-zone { border: 2px dashed var(--border-color); border-radius: 8px; padding: 24px; text-align: center; color: var(--text-secondary); background-color: var(--bg-main); transition: 0.2s; cursor: pointer; }
+.drop-zone { border: 2px dashed var(--border-color); border-radius: 8px; padding: 24px; text-align: center; color: var(--text-secondary); background-color: var(--bg-main); transition: 0.2s; }
 .drop-zone.dragover { background-color: #e0f2fe; border-color: var(--accent-color); color: var(--accent-color); }
 .search-bar { display: flex; align-items: center; background-color: var(--bg-main); border: 1px solid var(--border-color); border-radius: 20px; padding: 6px 12px; margin-top: 12px; }
 .search-bar input { border: none; outline: none; width: 100%; margin-left: 8px; background: transparent; }
 .item-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
 .content-area { flex: 1; padding: 24px; display: flex; flex-direction: column; overflow-y: auto; }
 .current-playlist-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 16px; border-bottom: 1px solid var(--border-color); margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+.playlist-controls { display: flex; align-items: center; gap: 12px; }
 
 /* 編集ページ */
 .edit-container { max-width: 1000px; margin: 0 auto; padding: 40px 20px; }
@@ -65,6 +69,17 @@ body { background-color: var(--bg-main); color: var(--text-primary); display: fl
 .form-group input[type="text"], .form-group input[type="date"] { padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; outline: none; }
 .form-group input:focus { border-color: var(--accent-color); }
 
+/* ★タグのスタイル（背景色を固定し、枠線をつけました） */
+.tags-input-container { border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; background: var(--bg-main); }
+.tags-input-container input { border: none; outline: none; width: 100%; padding: 4px; margin-bottom: 8px; }
+.tags-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.tag-item { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 16px; font-size: 12px; font-weight: bold; color: #333; background-color: var(--bg-surface); border: 1px solid var(--border-color); }
+.tag-item .remove-tag { cursor: pointer; font-size: 14px; margin-left: 4px; color: var(--text-secondary); }
+.tag-item .remove-tag:hover { color: red; }
+.tag-color-picker { width: 20px; height: 20px; padding: 0; border: none; border-radius: 50%; cursor: pointer; background: transparent; margin-left: 4px; }
+.tag-color-picker::-webkit-color-swatch-wrapper { padding: 0; }
+.tag-color-picker::-webkit-color-swatch { border: none; border-radius: 50%; box-shadow: 0 0 2px rgba(0,0,0,0.3); }
+
 /* ログページ */
 .log-container { max-width: 1000px; margin: 0 auto; padding: 40px 20px; }
 .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
@@ -72,6 +87,7 @@ body { background-color: var(--bg-main); color: var(--text-primary); display: fl
 .stat-card { background-color: var(--bg-surface); border: 1px solid var(--border-color); padding: 20px; border-radius: 8px; text-align: center; }
 .stat-card h3 { font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; }
 .stat-card p { font-size: 18px; font-weight: bold; color: var(--accent-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chart-wrapper { background-color: var(--bg-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; height: 400px; }
 
 /* プレイヤー */
 .global-player { position: fixed; bottom: 0; left: 0; width: 100%; height: var(--player-height); background-color: var(--bg-main); border-top: 1px solid var(--border-color); display: flex; align-items: center; padding: 0 24px; z-index: 100; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); }
@@ -89,77 +105,37 @@ body { background-color: var(--bg-main); color: var(--text-primary); display: fl
 .volume-controls { width: 30%; min-width: 150px; display: flex; align-items: center; justify-content: flex-end; gap: 12px; color: var(--text-secondary); }
 .volume-controls input[type="range"] { width: 100px; accent-color: var(--text-secondary); }
 
-/* 曲リスト (メイン画面) */
-.track-list { list-style: none; display: flex; flex-direction: column; }
-.track-list-item { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border-color); cursor: pointer; transition: 0.2s; gap: 16px; }
-.track-list-item:hover { background-color: var(--bg-hover); }
-.track-list-item.playing { background-color: #e0f2fe; border-left: 4px solid var(--accent-color); }
-.track-list-info { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.track-list-title { font-weight: bold; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.track-list-artist { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
-.track-list-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 
-/* =========================================
-   ★ タグの新しいデザイン（縁取り・省略・薄い背景）
-   ========================================= */
-.tags-input-container { border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; background: var(--bg-main); }
-.tags-input-container input[type="text"] { border: none; outline: none; width: 100%; padding: 4px; margin-bottom: 12px; font-size: 14px; border-bottom: 1px solid var(--border-color); border-radius: 0; }
-.tags-list { display: flex; flex-wrap: wrap; gap: 8px; }
-
-/* 既存タグの候補リスト */
-.available-tags-container { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-.available-tag-chip { padding: 4px 10px; border-radius: 16px; font-size: 11px; cursor: pointer; border: 1px solid transparent; max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: 0.2s; font-weight: bold; }
-.available-tag-chip:hover { filter: brightness(0.9); }
-
-/* 共通タグデザイン (編集画面 & プレイヤー画面) */
-.tag-item, .track-list-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    border-radius: 16px;
-    font-size: 12px;
-    font-weight: bold;
-    color: var(--text-primary);
-    border: 1px solid transparent; /* JSで色を指定 */
-    max-width: 150px; /* 長い名前を制限 */
-    white-space: nowrap;
-}
-.tag-text {
-    overflow: hidden;
-    text-overflow: ellipsis; /* ...で省略 */
-    cursor: pointer; /* 押せることをアピール */
-}
-.tag-text:hover { text-decoration: underline; }
-.tag-item .remove-tag { cursor: pointer; font-size: 14px; color: var(--text-secondary); flex-shrink: 0; }
-.tag-item .remove-tag:hover { color: red; }
-
-/* =========================================
-   ★ モーダル (ポップアップ画面) のデザイン
-   ========================================= */
-.modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.modal-content { background: var(--bg-main); padding: 24px; border-radius: 12px; width: 320px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
-.modal-content h3 { font-size: 16px; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
-.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
-
-/* スマホ対応 */
+/* =========================================================
+   ★ スマホ・タブレット用レスポンシブデザイン (横幅768px以下)
+   ========================================================= */
 @media (max-width: 768px) {
+    /* ヘッダーの文字を隠しアイコンだけにする */
     .header { padding: 0 10px; }
     .logo h1 { font-size: 18px; }
     .nav-links { gap: 4px; }
     .nav-btn span:not(.material-symbols-outlined) { display: none; }
     .nav-btn { padding: 8px; }
+
+    /* プレイヤーページ: 縦積みに変更 */
     .layout-container { flex-direction: column; }
     .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border-color); height: 250px; flex-shrink: 0; padding: 12px; }
     .content-area { padding: 12px; }
+
+    /* 編集ページ: 縦積みに変更 */
     .edit-container { padding: 20px 10px; }
     .edit-layout { flex-direction: column; height: auto; gap: 20px; }
     .edit-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border-color); padding-right: 0; padding-bottom: 20px; max-height: 200px; }
     .edit-main-area { flex-direction: column; align-items: center; gap: 20px; }
+
+    /* ログページ */
+    .log-container { padding: 20px 10px; }
+
+    /* スマホ用プレイヤー (高さを広げて2段組みにする) */
     :root { --player-height: 120px; }
     .global-player { flex-wrap: wrap; padding: 8px 12px; justify-content: space-between; align-content: center; }
-    .track-info { width: calc(100% - 120px); min-width: auto; } 
+    .track-info { width: calc(100% - 120px); min-width: auto; } /* 音量調整のスペースを空ける */
     .volume-controls { width: 100px; min-width: auto; }
-    .player-controls { width: 100%; order: 3; margin-top: 8px; } 
+    .player-controls { width: 100%; order: 3; margin-top: 8px; } /* コントロールを下の段に移動 */
     .progress-container { max-width: 100%; }
 }
