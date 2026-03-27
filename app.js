@@ -2,12 +2,18 @@
  * app.js - Web Music Player
  */
 
+// ★ 取得したクライアントIDを以下に貼り付けてください
+const GOOGLE_CLIENT_ID = '963318517208-gjqi9k8d5v6qr8hk1a4jm54cpdc2i03q.apps.googleusercontent.com';
+
 const DB_NAME = 'MusicPlayerDB';
 const DB_VERSION = 3; 
 let db = null;
 
 const audioPlayer = new Audio();
 let currentObjectUrl = null;
+
+let tokenClient;
+let gapiAccessToken = null;
 
 const appState = {
     tracks: [],
@@ -26,21 +32,20 @@ const appState = {
     selectedEditTracks: new Set(),
     editingTags: [],
 
-    // フェーズ3用: アカウント状態
     isLoggedIn: false,
     user: null
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
     initNavigation();
-    initAuthUI(); // フェーズ3準備
+    initAuthUI(); 
     initDragAndDrop();
     initPlayerControls(); 
     initPlaylists();
     initSearchAndSort();
     initBulkActions();
     initEditPage();      
-    initPlaylistPlaybackControls(); // ★追加: すべて再生/シャッフル機能
+    initPlaylistPlaybackControls(); 
     
     try {
         await initDB();
@@ -73,23 +78,76 @@ function initNavigation() {
     });
 }
 
-// ★フェーズ3準備: ログインUIの初期化
+// Google ログインの初期化とイベント設定
 function initAuthUI() {
     const btnLogin = document.getElementById('btn-login');
     const btnLogout = document.getElementById('btn-logout');
 
+    if (typeof google !== 'undefined' && google.accounts) {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CLIENT_ID,
+            // Drive操作用と、ユーザー名表示用のスコープを要求
+            scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile',
+            callback: (tokenResponse) => {
+                if (tokenResponse && tokenResponse.access_token) {
+                    gapiAccessToken = tokenResponse.access_token;
+                    appState.isLoggedIn = true;
+                    fetchUserInfo(gapiAccessToken);
+                }
+            },
+        });
+    }
+
     btnLogin.addEventListener('click', () => {
-        // ※次回ここにGoogle Identity Servicesの呼び出しを実装します
-        alert("次回フェーズでGoogle認証のポップアップが表示されるように実装します。");
+        if (GOOGLE_CLIENT_ID === 'ここに取得したクライアントIDを貼り付けます' || !GOOGLE_CLIENT_ID) {
+            alert('コード内の GOOGLE_CLIENT_ID を設定してください。');
+            return;
+        }
+        tokenClient.requestAccessToken();
     });
 
     btnLogout.addEventListener('click', () => {
-        // ※次回ここにログアウト処理を実装します
-        alert("ログアウト処理を実装予定です。");
+        if (gapiAccessToken && typeof google !== 'undefined') {
+            google.accounts.oauth2.revoke(gapiAccessToken, () => {
+                console.log('Token revoked');
+            });
+        }
+        gapiAccessToken = null;
+        appState.isLoggedIn = false;
+        appState.user = null;
+        updateAuthUIDisplay();
     });
 }
 
-// ★追加: リスト全体の再生/ランダム再生
+function fetchUserInfo(token) {
+    fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${token}` }
+    })
+    .then(res => res.json())
+    .then(data => {
+        appState.user = data;
+        updateAuthUIDisplay();
+        // ※次回、ここにDrive内のフォルダ作成とデータの同期処理を記述します
+        console.log("ログイン成功。Drive連携準備完了。");
+    })
+    .catch(err => console.error('ユーザー情報取得エラー:', err));
+}
+
+function updateAuthUIDisplay() {
+    const btnLogin = document.getElementById('btn-login');
+    const userInfo = document.getElementById('user-info');
+    const userName = document.getElementById('user-name');
+
+    if (appState.isLoggedIn && appState.user) {
+        btnLogin.style.display = 'none';
+        userInfo.style.display = 'flex';
+        userName.textContent = appState.user.name || 'ユーザー';
+    } else {
+        btnLogin.style.display = 'flex';
+        userInfo.style.display = 'none';
+    }
+}
+
 function initPlaylistPlaybackControls() {
     const btnPlayAll = document.getElementById('btn-play-all');
     const btnShuffleAll = document.getElementById('btn-shuffle-all');
@@ -97,7 +155,6 @@ function initPlaylistPlaybackControls() {
     btnPlayAll.addEventListener('click', () => {
         if (appState.currentQueue.length === 0) return;
         
-        // ソートを通常に戻して最初から再生
         const sortSelect = document.getElementById('main-sort-select');
         if (appState.sortModeMain === 'random') {
             sortSelect.value = 'manual';
@@ -109,7 +166,6 @@ function initPlaylistPlaybackControls() {
     btnShuffleAll.addEventListener('click', () => {
         if (appState.currentQueue.length === 0) return;
         
-        // ランダムソートに変更して最初から再生
         const sortSelect = document.getElementById('main-sort-select');
         sortSelect.value = 'random';
         sortSelect.dispatchEvent(new Event('change'));
@@ -181,7 +237,6 @@ function updateMainQueue() {
         }
     }
 
-    // 検索フィルタ
     if (appState.searchQueryMain) {
         baseList = baseList.filter(t => {
             const titleMatch = t.title.toLowerCase().includes(appState.searchQueryMain);
@@ -194,7 +249,6 @@ function updateMainQueue() {
         });
     }
 
-    // ソート
     if (appState.sortModeMain === 'random') {
         baseList.sort(() => Math.random() - 0.5); 
     } else if (appState.sortModeMain !== 'manual') {
@@ -262,7 +316,6 @@ function playTrack(index) {
 
     if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
     
-    // 現在はローカルのFileBlobを使用（フェーズ3でDrive APIのストリームに分岐します）
     if (track.fileBlob) {
         currentObjectUrl = URL.createObjectURL(track.fileBlob);
         audioPlayer.src = currentObjectUrl;
