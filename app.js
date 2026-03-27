@@ -19,7 +19,7 @@ const appState = {
     currentPlaylistId: null,
     
     searchQueryMain: "",
-    sortModeMain: "manual", // ★変更: デフォルトを手動に
+    sortModeMain: "manual",
     selectedMainTracks: new Set(),
     
     searchQueryEdit: "",
@@ -59,11 +59,9 @@ function initNavigation() {
                 page.classList.toggle('active', page.id === targetId);
             });
             
-            // ページ切り替え時にメイン画面の選択状態をリセット
             appState.selectedMainTracks.clear();
             updateBulkActionBar();
             
-            // 編集画面に切り替わった時にリストを描画
             if(targetId === 'edit') renderEditLibraryList();
         });
     });
@@ -100,7 +98,6 @@ function initSearchAndSort() {
         });
     }
 
-    // ★追加: すべて選択/選択解除の処理
     const selectAllCheckbox = document.getElementById('main-select-all');
     if (selectAllCheckbox) {
         selectAllCheckbox.addEventListener('change', (e) => {
@@ -146,9 +143,9 @@ function updateMainQueue() {
         });
     }
 
-    // ★変更: ソート（種類追加）
+    // ソート
     if (appState.sortModeMain === 'random') {
-        baseList.sort(() => Math.random() - 0.5); // ランダム
+        baseList.sort(() => Math.random() - 0.5); 
     } else if (appState.sortModeMain !== 'manual') {
         baseList.sort((a, b) => {
             switch (appState.sortModeMain) {
@@ -323,7 +320,8 @@ async function handleFiles(files) {
             fileBlob: file, fileName: file.name,
             title: meta.title || file.name.replace(/\.[^/.]+$/, ""),
             artist: meta.artist || "不明なアーティスト",
-            date: "", tags: [], thumbnailDataUrl: meta.picture || null, addedAt: Date.now()
+            date: "", tags: [], thumbnailDataUrl: meta.picture || null, 
+            addedAt: Date.now(), sortOrder: Date.now() // ★追加: 初期ソート順用
         };
         await saveTrackToDB(newTrack);
     }
@@ -350,6 +348,13 @@ function getAllTracksFromDB() {
 
 async function loadLibrary() {
     appState.tracks = await getAllTracksFromDB();
+    
+    // ★追加: sortOrder があればそれ基準で並び替え
+    appState.tracks.sort((a, b) => {
+        const orderA = a.sortOrder !== undefined ? a.sortOrder : a.addedAt;
+        const orderB = b.sortOrder !== undefined ? b.sortOrder : b.addedAt;
+        return orderA - orderB;
+    });
     
     appState.allKnownTags.clear();
     appState.tracks.forEach(t => {
@@ -399,11 +404,33 @@ function renderSidebarLibrary() {
     list.appendChild(allItem);
 }
 
+// ★追加: 手動並び替えのDB保存処理
+function saveManualOrder() {
+    if (appState.currentPlaylistId) {
+        const pl = appState.playlists.find(p => p.id === appState.currentPlaylistId);
+        if (pl) {
+            pl.trackIds = appState.currentQueue.map(t => t.id);
+            const tx = db.transaction(['playlists'], 'readwrite');
+            tx.objectStore('playlists').put(pl);
+        }
+    } else {
+        // 全曲表示のときだけ全体の順序を更新（検索中は更新しない）
+        if (!appState.searchQueryMain) {
+            appState.tracks = [...appState.currentQueue];
+            const tx = db.transaction(['tracks'], 'readwrite');
+            const store = tx.objectStore('tracks');
+            appState.tracks.forEach((t, i) => {
+                t.sortOrder = i;
+                store.put(t);
+            });
+        }
+    }
+}
+
 function renderMainTrackList() {
     const container = document.getElementById('current-playlist-items');
     container.innerHTML = '';
     
-    // ★追加: 「すべて選択」チェックボックスの状態を同期
     const selectAllCb = document.getElementById('main-select-all');
     if (appState.currentQueue.length > 0 && appState.selectedMainTracks.size === appState.currentQueue.length) {
         selectAllCb.checked = true;
@@ -413,10 +440,62 @@ function renderMainTrackList() {
 
     updateBulkActionBar();
 
+    let draggedItemIndex = null;
+
     appState.currentQueue.forEach((track, index) => {
         const li = document.createElement('li');
         li.className = 'track-list-item';
         if (appState.isPlaying && appState.currentTrackIndex === index) li.classList.add('playing');
+
+        // ★追加: 手動ソート時のドラッグ＆ドロップ機能
+        if (appState.sortModeMain === 'manual') {
+            li.draggable = true;
+            li.style.cursor = 'grab';
+            
+            li.addEventListener('dragstart', (e) => {
+                draggedItemIndex = index;
+                e.dataTransfer.effectAllowed = 'move';
+                li.style.opacity = '0.5';
+            });
+            
+            li.addEventListener('dragend', () => {
+                li.style.opacity = '1';
+                draggedItemIndex = null;
+            });
+            
+            li.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                li.style.borderTop = '2px solid var(--accent-color)';
+            });
+            
+            li.addEventListener('dragleave', () => {
+                li.style.borderTop = '';
+            });
+            
+            li.addEventListener('drop', (e) => {
+                e.preventDefault();
+                li.style.borderTop = '';
+                
+                if (draggedItemIndex === null || draggedItemIndex === index) return;
+                
+                // 順序の入れ替え
+                const draggedTrack = appState.currentQueue.splice(draggedItemIndex, 1)[0];
+                appState.currentQueue.splice(index, 0, draggedTrack);
+                
+                // 再生中のインデックスも追従させる
+                if (appState.currentTrackIndex === draggedItemIndex) {
+                    appState.currentTrackIndex = index;
+                } else if (appState.currentTrackIndex > draggedItemIndex && appState.currentTrackIndex <= index) {
+                    appState.currentTrackIndex--;
+                } else if (appState.currentTrackIndex < draggedItemIndex && appState.currentTrackIndex >= index) {
+                    appState.currentTrackIndex++;
+                }
+
+                saveManualOrder();
+                renderMainTrackList();
+            });
+        }
 
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
@@ -426,7 +505,7 @@ function renderMainTrackList() {
         checkbox.addEventListener('change', (e) => {
             if (e.target.checked) appState.selectedMainTracks.add(track.id);
             else appState.selectedMainTracks.delete(track.id);
-            renderMainTrackList(); // 全体を描画し直して状態を同期
+            renderMainTrackList(); 
         });
 
         const thumb = document.createElement('div');
@@ -470,7 +549,6 @@ function renderMainTrackList() {
         });
         actions.appendChild(addBtn);
 
-        // ★追加: 個別の「編集」ボタン
         const editBtn = document.createElement('button');
         editBtn.className = 'icon-btn';
         editBtn.innerHTML = '<span class="material-symbols-outlined">edit</span>';
@@ -531,12 +609,10 @@ function updateBulkActionBar() {
     }
 }
 
-// ★追加: 編集画面へジャンプする処理
 function jumpToEdit(trackIdsArray) {
     appState.selectedEditTracks.clear();
     trackIdsArray.forEach(id => appState.selectedEditTracks.add(id));
     
-    // 編集タブをクリックした状態をエミュレート
     const editTabBtn = document.querySelector('.nav-btn[data-target="edit"]');
     if(editTabBtn) editTabBtn.click();
 }
@@ -546,7 +622,6 @@ function initBulkActions() {
         openAddToPlaylistModal(Array.from(appState.selectedMainTracks));
     });
 
-    // ★追加: 一括操作の編集ボタン
     document.getElementById('bulk-edit-btn').addEventListener('click', () => {
         jumpToEdit(Array.from(appState.selectedMainTracks));
     });
@@ -786,13 +861,14 @@ function renderEditLibraryList() {
         const content = document.createElement('div');
         content.className = 'edit-list-content';
         
+        // ★修正: 編集サイドバーのタグもプレイヤー画面と同じクラスとスタイルで表示
         let tagsHtml = '';
         if (track.tags && track.tags.length > 0) {
-            tagsHtml = `<div class="edit-list-tags">` + 
+            tagsHtml = `<div class="edit-list-tags" style="display:flex; gap:4px; margin-top:4px;">` + 
                 track.tags.map(t => {
                     const text = typeof t === 'string' ? t : t.text;
                     const color = typeof t === 'string' ? '#ccc' : t.color;
-                    return `<span style="border:1px solid ${color}; padding: 1px 4px; border-radius: 4px;">${text}</span>`;
+                    return `<span class="track-list-tag" style="border: 1px solid ${color}; background-color: ${color}33;" title="${text}">${text}</span>`;
                 }).join('') + `</div>`;
         }
 
@@ -812,11 +888,9 @@ function renderEditLibraryList() {
         list.appendChild(li);
     });
     
-    // 初回描画時にもフォームの状態をチェック（プレイヤー画面からジャンプしてきた時用）
     checkEditFormState();
 }
 
-// 編集フォームの表示状態を制御する処理を分離
 function checkEditFormState() {
     document.getElementById('edit-selected-count').textContent = 
         appState.selectedEditTracks.size > 0 ? `${appState.selectedEditTracks.size}曲を選択中` : '曲を選択して編集';
