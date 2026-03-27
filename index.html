@@ -4,239 +4,133 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Web Music Player</title>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
     <link rel="stylesheet" href="style.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
 </head>
 <body>
-
-    <header class="header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-        <div style="display: flex; align-items: center; gap: 24px;">
-            <div class="logo">
-                <span class="material-symbols-outlined" style="font-size: 28px;">music_cast</span>
-                <h1>MusicPlayer</h1>
-            </div>
-            <nav class="nav-links">
-                <button class="nav-btn active" data-target="player">
-                    <span class="material-symbols-outlined">play_circle</span>
-                    <span>プレイヤー</span>
-                </button>
-                <button class="nav-btn" data-target="edit">
-                    <span class="material-symbols-outlined">edit_note</span>
-                    <span>情報編集</span>
-                </button>
-                <button class="nav-btn" data-target="log">
-                    <span class="material-symbols-outlined">bar_chart</span>
-                    <span>ログ・統計</span>
-                </button>
-            </nav>
-        </div>
-        
-        <div class="auth-container">
-            <button id="btn-login" class="secondary-btn" style="display: flex; align-items: center; gap: 4px;">
-                <span class="material-symbols-outlined" style="font-size: 18px;">login</span>
-                <span>Googleでログイン</span>
-            </button>
-            <div id="user-info" style="display: none; align-items: center; gap: 8px;">
-                <span class="material-symbols-outlined" style="font-size: 24px; color: var(--accent-color);">account_circle</span>
-                <span id="user-name" style="font-size: 14px; font-weight: bold; margin-right: 8px;"></span>
-                
-                <button id="btn-sync" class="primary-btn" style="padding: 6px 12px; font-size: 12px; display: flex; align-items: center; gap: 4px;">
-                    <span class="material-symbols-outlined" style="font-size: 16px;">cloud_sync</span>
-                    <span id="sync-text">Driveと同期</span>
-                </button>
-
-                <button id="btn-logout" class="icon-btn" title="ログアウト"><span class="material-symbols-outlined">logout</span></button>
+    <header class="app-header">
+        <div class="logo">Web Music Player</div>
+        <div class="auth-area">
+            <button id="btn-login" class="primary-btn">Googleでログイン</button>
+            <div id="user-info" style="display: none; align-items: center; gap: 15px;">
+                <span id="sync-status" style="font-size: 12px; color: var(--text-secondary, #888);"></span>
+                <span id="user-name" style="font-weight: bold;"></span>
+                <button id="btn-logout" class="secondary-btn">ログアウト</button>
             </div>
         </div>
     </header>
 
-    <main class="main-content">
-        
-        <section id="player" class="page-section active">
-            <div class="layout-container">
-                <aside class="sidebar">
-                    <div class="search-bar">
-                        <span class="material-symbols-outlined" style="font-size: 20px; color: var(--text-secondary);">search</span>
-                        <input type="text" id="main-search-input" placeholder="曲名、アーティスト、タグで検索...">
-                    </div>
-
-                    <div id="drop-zone" class="drop-zone">
-                        <span class="material-symbols-outlined" style="font-size: 32px; margin-bottom: 8px;">upload_file</span>
-                        <p style="font-size: 14px; font-weight: bold;">ここに音楽ファイルをドロップ</p>
-                        <p style="font-size: 12px; margin-top: 4px;">または</p>
-                        <input type="file" id="file-upload" accept="audio/*" multiple style="display: none;">
-                        <button class="secondary-btn" style="margin-top: 12px; font-size: 12px;" onclick="document.getElementById('file-upload').click()">ファイルを選択</button>
-                    </div>
-
-                    <div>
-                        <ul id="my-library-list" class="item-list">
-                            </ul>
-                    </div>
-
-                    <div>
-                        <div class="section-header">
-                            <h2><span class="material-symbols-outlined" style="font-size: 18px;">featured_play_list</span> プレイリスト</h2>
-                            <button id="create-playlist-btn" class="icon-btn" title="新規作成"><span class="material-symbols-outlined">add</span></button>
-                        </div>
-                        <ul id="playlists-container" class="item-list">
-                            </ul>
-                    </div>
-                </aside>
-
-                <div class="content-area">
-                    <div class="content-area-inner">
-                        <div class="current-playlist-header">
-                            <h2 id="current-playlist-name" style="font-size: 24px;">マイライブラリ (すべて)</h2>
-                            
-                            <div class="playlist-action-buttons" style="display: flex; gap: 8px; margin-top: 12px;">
-                                <button id="btn-play-all" class="primary-btn" style="padding: 6px 16px; border-radius: 20px;">
-                                    <span class="material-symbols-outlined">play_arrow</span> すべて再生
-                                </button>
-                                <button id="btn-shuffle-all" class="secondary-btn" style="padding: 6px 16px; border-radius: 20px;">
-                                    <span class="material-symbols-outlined">shuffle</span> シャッフル再生
-                                </button>
-                            </div>
-
-                            <div class="playlist-controls" style="margin-top: 16px;">
-                                <div style="display: flex; align-items: center; gap: 6px; margin-right: 12px;">
-                                    <input type="checkbox" id="main-select-all" class="custom-checkbox">
-                                    <label for="main-select-all" style="font-size: 14px; cursor: pointer; color: var(--text-secondary);">すべて選択</label>
-                                </div>
-                                <select id="main-sort-select" class="control-select">
-                                    <option value="manual">手動 (デフォルト)</option>
-                                    <option value="date_desc">追加日が新しい順</option>
-                                    <option value="date_asc">追加日が古い順</option>
-                                    <option value="name_asc">タイトル順 (昇順)</option>
-                                    <option value="name_desc">タイトル順 (降順)</option>
-                                    <option value="artist_asc">アーティスト順 (昇順)</option>
-                                    <option value="artist_desc">アーティスト順 (降順)</option>
-                                    <option value="release_desc">投稿日/リリース日 (新しい順)</option>
-                                    <option value="release_asc">投稿日/リリース日 (古い順)</option>
-                                    <option value="random">ランダム順</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div id="bulk-actions-bar" class="bulk-actions-bar">
-                            <span id="bulk-count">0曲を選択中</span>
-                            <button id="bulk-add-playlist-btn" class="secondary-btn" style="padding: 4px 8px; font-size: 12px;">プレイリストに追加</button>
-                            <button id="bulk-edit-btn" class="secondary-btn" style="padding: 4px 8px; font-size: 12px;">情報を編集</button>
-                            <button id="bulk-remove-playlist-btn" class="secondary-btn" style="padding: 4px 8px; font-size: 12px; display: none;">リストから外す</button>
-                            <button id="bulk-delete-btn" class="secondary-btn" style="padding: 4px 8px; font-size: 12px; color: red; border-color: red;">完全削除</button>
-                        </div>
-
-                        <ul id="current-playlist-items" class="track-list">
-                            </ul>
-                    </div>
-                </div>
+    <div class="app-container">
+        <aside class="sidebar">
+            <nav class="nav-menu">
+                <button class="nav-btn active" data-target="main"><span class="material-symbols-outlined">home</span> ホーム</button>
+                <button class="nav-btn" data-target="edit"><span class="material-symbols-outlined">edit_note</span> ライブラリ管理</button>
+            </nav>
+            <div class="sidebar-section">
+                <h3>ライブラリ</h3>
+                <ul id="my-library-list" class="sidebar-list"></ul>
             </div>
-        </section>
-
-        <section id="edit" class="page-section">
-            <div class="edit-container">
-                <div class="edit-header" style="display: flex; justify-content: space-between; align-items: center;">
-                    <h2>楽曲情報の編集</h2>
+            <div class="sidebar-section">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3>プレイリスト</h3>
+                    <button id="create-playlist-btn" class="icon-btn" title="新規作成"><span class="material-symbols-outlined">add</span></button>
                 </div>
-                
-                <div class="edit-layout">
-                    <div class="edit-sidebar">
-                        <h3>ライブラリの曲</h3>
-                        <p id="edit-selected-count" style="font-size: 12px; color: var(--accent-color); font-weight: bold;">曲を選択して編集</p>
-                        
-                        <div class="search-bar" style="margin-top: 0; margin-bottom: 12px;">
-                            <span class="material-symbols-outlined" style="font-size: 18px;">search</span>
-                            <input type="text" id="edit-search-input" placeholder="曲名やアーティストで検索...">
-                        </div>
-                        
-                        <ul id="edit-library-list" style="list-style: none; display: flex; flex-direction: column; gap: 4px;">
-                            </ul>
-                    </div>
-
-                    <div id="edit-form-area" class="edit-main-area" style="display: none;">
-                        <div class="edit-thumbnail-section">
-                            <div id="edit-thumbnail-preview" class="thumbnail-preview">
-                                <span class="material-symbols-outlined">image</span>
-                            </div>
-                            <p style="font-size: 12px; color: var(--text-secondary); text-align: center;">※サムネイルは現在ファイルのID3タグの読み込みのみ対応しています</p>
-                        </div>
-                        
-                        <div class="edit-form-section">
-                            <div class="form-group">
-                                <label for="edit-title">タイトル <span class="edit-info-note">※複数選択時は変更できません</span></label>
-                                <input type="text" id="edit-title" placeholder="曲のタイトル">
-                            </div>
-                            <div class="form-group">
-                                <label for="edit-artist">アーティスト <span class="edit-info-note">※複数選択時に入力するとすべて上書きされます</span></label>
-                                <input type="text" id="edit-artist" placeholder="アーティスト名">
-                            </div>
-                            <div class="form-group">
-                                <label for="edit-date">追加日/リリース日 <span class="edit-info-note">※複数選択時に入力するとすべて上書きされます</span></label>
-                                <input type="date" id="edit-date">
-                            </div>
-                            <div class="form-group">
-                                <label>タグ <span class="edit-info-note">※複数選択時はここに追加したタグが全曲に付与されます</span></label>
-                                <div class="tags-input-container">
-                                    <input type="text" id="edit-tags-input" placeholder="タグを入力してEnter..." list="existing-tags-list">
-                                    <div id="edit-tags-list" class="tags-list">
-                                        </div>
-                                </div>
-                            </div>
-                            
-                            <div style="display: flex; justify-content: flex-end; margin-top: 24px;">
-                                <button id="save-metadata-btn" class="primary-btn"><span class="material-symbols-outlined">save</span> 変更を保存</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <ul id="playlists-container" class="sidebar-list"></ul>
             </div>
-        </section>
+        </aside>
 
-        <section id="log" class="page-section">
-            <div class="log-container">
-                <div class="log-header">
-                    <h2>再生ログと統計</h2>
-                </div>
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <h3>総再生回数</h3>
-                        <p id="stat-total-plays">0 回</p>
-                    </div>
-                    <div class="stat-card">
-                        <h3>総再生時間</h3>
-                        <p id="stat-total-time">0 時間</p>
-                    </div>
-                    <div class="stat-card">
-                        <h3>最も聴いた曲</h3>
-                        <p id="stat-top-track">-</p>
-                    </div>
-                    <div class="stat-card">
-                        <h3>登録曲数</h3>
-                        <p id="stat-total-tracks">0 曲</p>
+        <main class="main-content">
+            <section id="main" class="page-section active">
+                <div class="page-header">
+                    <h2 id="current-playlist-name">マイライブラリ (すべて)</h2>
+                    <div class="controls-bar">
+                        <button id="btn-play-all" class="secondary-btn"><span class="material-symbols-outlined">play_arrow</span> すべて再生</button>
+                        <button id="btn-shuffle-all" class="secondary-btn"><span class="material-symbols-outlined">shuffle</span> シャッフル</button>
+                        <select id="main-sort-select" class="sort-select">
+                            <option value="manual">手動並び替え</option>
+                            <option value="date_desc">追加日 (新しい順)</option>
+                            <option value="date_asc">追加日 (古い順)</option>
+                            <option value="name_asc">タイトル (A-Z)</option>
+                            <option value="name_desc">タイトル (Z-A)</option>
+                            <option value="artist_asc">アーティスト (A-Z)</option>
+                            <option value="random">ランダム</option>
+                        </select>
+                        <input type="text" id="main-search-input" class="search-input" placeholder="曲を検索...">
                     </div>
                 </div>
-                <div class="chart-wrapper">
-                    <p style="text-align: center; color: var(--text-secondary); line-height: 360px;">（※ここに将来的にグラフが表示されます）</p>
+
+                <div id="drop-zone" class="drop-zone">
+                    <span class="material-symbols-outlined" style="font-size: 32px;">upload_file</span>
+                    <p>ここに音楽ファイルをドロップするか、クリックして追加</p>
+                    <input type="file" id="file-upload" multiple accept="audio/*" style="display: none;">
                 </div>
-            </div>
-        </section>
 
-    </main>
+                <div id="bulk-actions-bar" class="bulk-actions-bar">
+                    <span id="bulk-count">0曲を選択中</span>
+                    <div class="bulk-buttons">
+                        <button id="bulk-add-playlist-btn" class="secondary-btn">プレイリストへ</button>
+                        <button id="bulk-edit-btn" class="secondary-btn">編集</button>
+                        <button id="bulk-remove-playlist-btn" class="secondary-btn" style="display: none;">リストから外す</button>
+                        <button id="bulk-delete-btn" class="danger-btn">完全削除</button>
+                    </div>
+                </div>
 
-    <div class="global-player">
-        <div class="track-info">
-            <div id="player-thumbnail" class="player-thumbnail">
-                <span class="material-symbols-outlined">music_note</span>
-            </div>
-            <div class="details">
-                <span id="player-title" class="title">未選択</span>
-                <span id="player-artist" class="artist">-</span>
+                <div class="track-list-header">
+                    <input type="checkbox" id="main-select-all" class="custom-checkbox" title="すべて選択">
+                    <span>曲名 / アーティスト</span>
+                </div>
+                <ul id="current-playlist-items" class="track-list"></ul>
+            </section>
+
+            <section id="edit" class="page-section">
+                <div class="edit-container">
+                    <div class="edit-list-area">
+                        <div class="page-header">
+                            <h2>曲情報の編集</h2>
+                            <input type="text" id="edit-search-input" class="search-input" placeholder="曲を検索...">
+                        </div>
+                        <div id="edit-selected-count" style="margin-bottom: 10px; font-size: 14px; font-weight: bold;">曲を選択して編集</div>
+                        <ul id="edit-library-list" class="edit-list"></ul>
+                    </div>
+                    
+                    <div id="edit-form-area" class="edit-form-area" style="display: none;">
+                        <div id="edit-thumbnail-preview" class="thumbnail-preview"></div>
+                        <div class="form-group">
+                            <label>タイトル</label>
+                            <input type="text" id="edit-title">
+                        </div>
+                        <div class="form-group">
+                            <label>アーティスト</label>
+                            <input type="text" id="edit-artist">
+                        </div>
+                        <div class="form-group">
+                            <label>リリース日/年</label>
+                            <input type="text" id="edit-date">
+                        </div>
+                        <div class="form-group">
+                            <label>タグ追加 (Enterで確定)</label>
+                            <input type="text" id="edit-tags-input" list="existing-tags-list" autocomplete="off">
+                            <div id="edit-tags-list" class="tags-container"></div>
+                        </div>
+                        <button id="save-metadata-btn" class="primary-btn" style="margin-top: 20px; width: 100%;">保存して同期</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <footer class="player-bar">
+        <div class="player-info">
+            <div id="player-thumbnail" class="player-thumbnail"></div>
+            <div>
+                <div id="player-title" class="player-title">未選択</div>
+                <div id="player-artist" class="player-artist">-</div>
             </div>
         </div>
-
         <div class="player-controls">
-            <div class="buttons">
+            <div class="control-buttons">
                 <button id="ctrl-prev" class="icon-btn"><span class="material-symbols-outlined">skip_previous</span></button>
                 <button id="ctrl-play" class="icon-btn play-btn"><span class="material-symbols-outlined">play_arrow</span></button>
                 <button id="ctrl-next" class="icon-btn"><span class="material-symbols-outlined">skip_next</span></button>
@@ -247,12 +141,11 @@
                 <span id="time-total">0:00</span>
             </div>
         </div>
-
-        <div class="volume-controls">
-            <span class="material-symbols-outlined" style="font-size: 20px;">volume_up</span>
+        <div class="player-volume">
+            <span class="material-symbols-outlined">volume_up</span>
             <input type="range" id="volume-bar" value="100" min="0" max="100">
         </div>
-    </div>
+    </footer>
 
     <script src="app.js"></script>
 </body>
