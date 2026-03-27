@@ -1,36 +1,37 @@
 /**
  * app.js - Web Music Player
- * 第5弾: 音楽プレイヤー機能とプレイリスト表示の実装
+ * 第5弾: プレイヤー機能、プレイリスト、タグデザイン改良
  */
 
 const DB_NAME = 'MusicPlayerDB';
 const DB_VERSION = 3; 
 let db = null;
 
-// 音声再生用のAudioオブジェクトを作成
+// 音声再生用のAudioオブジェクト
 const audioPlayer = new Audio();
+let currentObjectUrl = null;
 
 const appState = {
     tracks: [],
     playlists: [],
-    currentTrack: null,
+    currentQueue: [], // 現在再生中のリスト
+    currentTrackIndex: -1,
     isPlaying: false,
     editingTrackId: null,
-    editingTags: [],
-    // プレイヤー用ステート
-    currentQueue: [], // 現在再生中のリスト
-    currentIndex: -1  // 現在再生中の曲のインデックス
+    editingTags: [] 
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
     initNavigation();
     initDragAndDrop();
     initEditPage();
-    initPlayer(); // ★プレイヤーの初期化を追加
+    initPlayerControls(); // ★追加：プレイヤーの初期化
+    initPlaylists();      // ★追加：プレイリストの初期化
     
     try {
         await initDB();
         await loadLibrary();
+        await loadPlaylists(); // ★追加：プレイリストの読み込み
     } catch (error) {
         console.error('DB初期化エラー:', error);
     }
@@ -67,6 +68,126 @@ function initDB() {
     });
 }
 
+// === ★追加：プレイヤーの制御 ===
+function initPlayerControls() {
+    const playBtn = document.getElementById('ctrl-play');
+    const prevBtn = document.getElementById('ctrl-prev');
+    const nextBtn = document.getElementById('ctrl-next');
+    const seekBar = document.getElementById('seek-bar');
+    const volumeBar = document.getElementById('volume-bar');
+
+    playBtn.addEventListener('click', togglePlay);
+    nextBtn.addEventListener('click', playNext);
+    prevBtn.addEventListener('click', playPrev);
+
+    // シークバーの操作
+    seekBar.addEventListener('input', (e) => {
+        if (audioPlayer.duration) {
+            audioPlayer.currentTime = (e.target.value / 100) * audioPlayer.duration;
+        }
+    });
+
+    // 音量の操作
+    volumeBar.addEventListener('input', (e) => {
+        audioPlayer.volume = e.target.value / 100;
+    });
+    audioPlayer.volume = volumeBar.value / 100;
+
+    // 時間の更新
+    audioPlayer.addEventListener('timeupdate', () => {
+        if (!audioPlayer.duration) return;
+        const progressPercent = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+        seekBar.value = progressPercent;
+        document.getElementById('time-current').textContent = formatTime(audioPlayer.currentTime);
+        document.getElementById('time-total').textContent = formatTime(audioPlayer.duration);
+    });
+
+    // 曲が終わった時
+    audioPlayer.addEventListener('ended', playNext);
+}
+
+function formatTime(seconds) {
+    if (isNaN(seconds)) return "0:00";
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+}
+
+function playTrack(index) {
+    if (index < 0 || index >= appState.currentQueue.length) return;
+    
+    const track = appState.currentQueue[index];
+    appState.currentTrackIndex = index;
+
+    // メモリ解放と新しいURLの生成
+    if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
+    currentObjectUrl = URL.createObjectURL(track.fileBlob);
+    
+    audioPlayer.src = currentObjectUrl;
+    audioPlayer.play()
+        .then(() => {
+            appState.isPlaying = true;
+            updatePlayerUI(track);
+            renderMainTrackList(); // リストの見た目（再生中マーク）を更新
+        })
+        .catch(e => console.error("再生エラー:", e));
+}
+
+function togglePlay() {
+    if (appState.currentQueue.length === 0) return;
+    
+    if (appState.isPlaying) {
+        audioPlayer.pause();
+        appState.isPlaying = false;
+    } else {
+        if (audioPlayer.src) {
+            audioPlayer.play();
+            appState.isPlaying = true;
+        } else {
+            playTrack(0); // 何もセットされていなければ最初から
+        }
+    }
+    updatePlayButtonUI();
+}
+
+function playNext() {
+    if (appState.currentQueue.length === 0) return;
+    let nextIndex = appState.currentTrackIndex + 1;
+    if (nextIndex >= appState.currentQueue.length) nextIndex = 0; // ループ
+    playTrack(nextIndex);
+}
+
+function playPrev() {
+    if (appState.currentQueue.length === 0) return;
+    let prevIndex = appState.currentTrackIndex - 1;
+    if (prevIndex < 0) prevIndex = appState.currentQueue.length - 1;
+    playTrack(prevIndex);
+}
+
+function updatePlayerUI(track) {
+    document.getElementById('player-title').textContent = track.title;
+    document.getElementById('player-artist').textContent = track.artist;
+    
+    const thumbnail = document.getElementById('player-thumbnail');
+    if (track.thumbnailDataUrl) {
+        thumbnail.style.backgroundImage = `url(${track.thumbnailDataUrl})`;
+        thumbnail.innerHTML = '';
+    } else {
+        thumbnail.style.backgroundImage = 'none';
+        thumbnail.innerHTML = '<span class="material-symbols-outlined">music_note</span>';
+    }
+    updatePlayButtonUI();
+}
+
+function updatePlayButtonUI() {
+    const playBtn = document.getElementById('ctrl-play');
+    playBtn.innerHTML = appState.isPlaying 
+        ? '<span class="material-symbols-outlined">pause</span>' 
+        : '<span class="material-symbols-outlined">play_arrow</span>';
+}
+
+// === マイライブラリ・リスト描画 ===
+
 function initDragAndDrop() {
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-upload');
@@ -84,33 +205,22 @@ function initDragAndDrop() {
 function readAudioTags(file) {
     return new Promise((resolve) => {
         if (typeof window.jsmediatags === 'undefined') {
-            resolve({ title: null, artist: null, picture: null });
-            return;
+            resolve({ title: null, artist: null, picture: null }); return;
         }
         window.jsmediatags.read(file, {
             onSuccess: function(tag) {
-                let tags = tag.tags;
-                let pictureUrl = null;
+                let tags = tag.tags; let pictureUrl = null;
                 if (tags.picture) {
                     try {
-                        let data = tags.picture.data;
-                        let format = tags.picture.format;
+                        let data = tags.picture.data; let format = tags.picture.format;
                         let base64String = "";
-                        for (let i = 0; i < data.length; i++) {
-                            base64String += String.fromCharCode(data[i]);
-                        }
+                        for (let i = 0; i < data.length; i++) base64String += String.fromCharCode(data[i]);
                         pictureUrl = `data:${format};base64,${window.btoa(base64String)}`;
-                    } catch(e) { console.error("画像読み込みエラー", e); }
+                    } catch(e) {}
                 }
-                resolve({
-                    title: tags.title || null,
-                    artist: tags.artist || null,
-                    picture: pictureUrl
-                });
+                resolve({ title: tags.title || null, artist: tags.artist || null, picture: pictureUrl });
             },
-            onError: function() {
-                resolve({ title: null, artist: null, picture: null });
-            }
+            onError: function() { resolve({ title: null, artist: null, picture: null }); }
         });
     });
 }
@@ -120,31 +230,23 @@ async function handleFiles(files) {
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
         if (!file.type.startsWith('audio/')) continue;
-
         const meta = await readAudioTags(file);
-
         const newTrack = {
             id: 'track_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-            fileBlob: file, // ここに音声データ本体が入っています
-            fileName: file.name,
+            fileBlob: file, fileName: file.name,
             title: meta.title || file.name.replace(/\.[^/.]+$/, ""),
             artist: meta.artist || "不明なアーティスト",
-            date: "", 
-            tags: [],
-            thumbnailDataUrl: meta.picture || null,
-            addedAt: Date.now()
+            date: "", tags: [], thumbnailDataUrl: meta.picture || null, addedAt: Date.now()
         };
         await saveTrackToDB(newTrack);
     }
     await loadLibrary();
-    alert('ファイルの追加が完了しました。');
 }
 
 function saveTrackToDB(track) {
     return new Promise((resolve, reject) => {
         const transaction = db.transaction(['tracks'], 'readwrite');
-        const store = transaction.objectStore('tracks');
-        const request = store.put(track);
+        const request = transaction.objectStore('tracks').put(track);
         request.onsuccess = () => resolve();
         request.onerror = (e) => reject(e.target.error);
     });
@@ -153,8 +255,7 @@ function saveTrackToDB(track) {
 function getAllTracksFromDB() {
     return new Promise((resolve, reject) => {
         const transaction = db.transaction(['tracks'], 'readonly');
-        const store = transaction.objectStore('tracks');
-        const request = store.getAll();
+        const request = transaction.objectStore('tracks').getAll();
         request.onsuccess = () => resolve(request.result);
         request.onerror = (e) => reject(e.target.error);
     });
@@ -162,219 +263,135 @@ function getAllTracksFromDB() {
 
 async function loadLibrary() {
     appState.tracks = await getAllTracksFromDB();
-    const sortedTracks = [...appState.tracks].sort((a, b) => b.addedAt - a.addedAt);
+    // 全曲をデフォルトの再生キューにセット
+    appState.currentQueue = [...appState.tracks].sort((a, b) => b.addedAt - a.addedAt);
     
-    renderLibraryList(sortedTracks);     // 左サイドバー
-    renderEditLibraryList(sortedTracks); // 編集用リスト
-    renderCurrentPlaylistItems(sortedTracks); // 中央のメインリスト
+    renderSidebarLibrary();
+    renderMainTrackList(); // 中央の画面に曲を表示
+    renderEditLibraryList(appState.tracks);
 }
 
-// ----------------------------------------------------
-// ★ NEW: 中央のメインリスト描画（ここから再生可能）
-// ----------------------------------------------------
-function renderCurrentPlaylistItems(tracks) {
-    const list = document.getElementById('current-playlist-items');
+function renderSidebarLibrary() {
+    const list = document.getElementById('my-library-list');
     list.innerHTML = '';
+    // 「すべて」をクリックした時の動作
+    const allItem = document.createElement('li');
+    allItem.style.padding = '10px'; allItem.style.cursor = 'pointer'; allItem.style.fontWeight = 'bold';
+    allItem.innerHTML = `<span class="material-symbols-outlined">library_music</span> すべての曲 (${appState.tracks.length})`;
+    allItem.addEventListener('click', () => {
+        document.getElementById('current-playlist-name').textContent = "マイライブラリ (すべて)";
+        appState.currentQueue = [...appState.tracks].sort((a, b) => b.addedAt - a.addedAt);
+        renderMainTrackList();
+    });
+    list.appendChild(allItem);
+}
 
-    tracks.forEach((track, index) => {
+// ★追加：メイン画面の曲リスト描画
+function renderMainTrackList() {
+    const container = document.getElementById('current-playlist-items');
+    container.innerHTML = '';
+
+    appState.currentQueue.forEach((track, index) => {
         const li = document.createElement('li');
-        li.style.padding = '12px 16px';
-        li.style.borderBottom = '1px solid var(--border-color)';
-        li.style.cursor = 'pointer';
-        li.style.display = 'flex';
-        li.style.alignItems = 'center';
-        li.style.gap = '16px';
-        li.style.transition = 'background-color 0.2s';
+        li.className = 'track-list-item';
         
-        // マウスホバーで背景色を変える
-        li.onmouseenter = () => li.style.backgroundColor = 'var(--bg-hover)';
-        li.onmouseleave = () => li.style.backgroundColor = 'transparent';
+        // 再生中の曲は色を変える
+        if (appState.isPlaying && appState.currentTrackIndex === index) {
+            li.classList.add('playing');
+        }
 
-        // タグを文字列に変換（色情報は無視してテキストだけ表示）
-        const tagsText = (track.tags || []).map(t => typeof t === 'object' ? t.text : t).join(', ');
+        // サムネイル
+        const thumb = document.createElement('div');
+        thumb.style.width = '40px'; thumb.style.height = '40px'; thumb.style.borderRadius = '4px';
+        thumb.style.backgroundColor = 'var(--bg-surface)'; thumb.style.backgroundSize = 'cover';
+        thumb.style.display = 'flex'; thumb.style.alignItems = 'center'; thumb.style.justifyContent = 'center';
+        if (track.thumbnailDataUrl) {
+            thumb.style.backgroundImage = `url(${track.thumbnailDataUrl})`;
+        } else {
+            thumb.innerHTML = '<span class="material-symbols-outlined" style="font-size:20px; color:var(--text-secondary);">music_note</span>';
+        }
 
-        li.innerHTML = `
-            <div style="width: 24px; text-align: right; color: var(--text-secondary); font-size: 14px;">${index + 1}</div>
-            <div style="flex: 1; overflow: hidden;">
-                <div style="font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${track.title}</div>
-                <div style="font-size: 12px; color: var(--text-secondary);">${track.artist}</div>
-            </div>
-            <div style="font-size: 12px; color: var(--text-secondary); width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right;">
-                ${tagsText}
-            </div>
+        // 情報
+        const info = document.createElement('div');
+        info.className = 'track-list-info';
+        
+        let tagsHtml = '';
+        if (track.tags && track.tags.length > 0) {
+            tagsHtml = `<div class="track-list-tags">` + 
+                track.tags.map(t => {
+                    const tObj = typeof t === 'string' ? {text: t, color: '#ccc'} : t;
+                    return `<span class="track-list-tag" style="border-left: 3px solid ${tObj.color}">${tObj.text}</span>`;
+                }).join('') + `</div>`;
+        }
+
+        info.innerHTML = `
+            <div class="track-list-title">${track.title}</div>
+            <div class="track-list-artist">${track.artist}</div>
+            ${tagsHtml}
         `;
 
-        // 曲をクリックしたら再生
-        li.addEventListener('click', () => {
-            playTrack(track, tracks);
-        });
-        list.appendChild(li);
-    });
-}
-
-// ----------------------------------------------------
-// ★ NEW: プレイヤーの制御ロジック
-// ----------------------------------------------------
-function initPlayer() {
-    const playBtn = document.getElementById('ctrl-play');
-    const prevBtn = document.getElementById('ctrl-prev');
-    const nextBtn = document.getElementById('ctrl-next');
-    const seekBar = document.getElementById('seek-bar');
-    const volumeBar = document.getElementById('volume-bar');
-    const timeCurrent = document.getElementById('time-current');
-    const timeTotal = document.getElementById('time-total');
-
-    // 再生・一時停止ボタン
-    playBtn.addEventListener('click', () => {
-        if (!appState.currentTrack) return; // 曲が選ばれてなければ何もしない
-        if (audioPlayer.paused) {
-            audioPlayer.play();
-        } else {
-            audioPlayer.pause();
-        }
-    });
-
-    // オーディオの状態に合わせてアイコンを変更
-    audioPlayer.addEventListener('play', () => {
-        playBtn.innerHTML = '<span class="material-symbols-outlined">pause</span>';
-        appState.isPlaying = true;
-    });
-
-    audioPlayer.addEventListener('pause', () => {
-        playBtn.innerHTML = '<span class="material-symbols-outlined">play_arrow</span>';
-        appState.isPlaying = false;
-    });
-
-    // 再生位置の更新（シークバーと時間表示）
-    audioPlayer.addEventListener('timeupdate', () => {
-        if (audioPlayer.duration) {
-            const progressPercent = (audioPlayer.currentTime / audioPlayer.duration) * 100;
-            seekBar.value = progressPercent;
-            timeCurrent.textContent = formatTime(audioPlayer.currentTime);
-            timeTotal.textContent = formatTime(audioPlayer.duration);
-        }
-    });
-
-    // 曲が終わったら次の曲へ
-    audioPlayer.addEventListener('ended', () => {
-        playNext();
-    });
-
-    // シークバーを動かした時
-    seekBar.addEventListener('input', (e) => {
-        if (audioPlayer.duration) {
-            const seekTime = (e.target.value / 100) * audioPlayer.duration;
-            audioPlayer.currentTime = seekTime;
-        }
-    });
-
-    // 音量バーを動かした時
-    volumeBar.addEventListener('input', (e) => {
-        audioPlayer.volume = e.target.value / 100;
-    });
-
-    prevBtn.addEventListener('click', playPrev);
-    nextBtn.addEventListener('click', playNext);
-}
-
-// 秒数を「分:秒」にフォーマット
-function formatTime(seconds) {
-    if (isNaN(seconds)) return "0:00";
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-// 曲を再生する関数
-async function playTrack(track, queue) {
-    appState.currentTrack = track;
-    appState.currentQueue = queue;
-    appState.currentIndex = queue.findIndex(t => t.id === track.id);
-
-    // 画面下部のプレイヤーの表示を更新
-    document.getElementById('player-title').textContent = track.title;
-    document.getElementById('player-artist').textContent = track.artist;
-    
-    const thumb = document.getElementById('player-thumbnail');
-    if (track.thumbnailDataUrl) {
-        thumb.style.backgroundImage = `url(${track.thumbnailDataUrl})`;
-        thumb.innerHTML = '';
-    } else {
-        thumb.style.backgroundImage = 'none';
-        thumb.innerHTML = '<span class="material-symbols-outlined">music_note</span>';
-    }
-
-    // Blob（ファイルデータ）から再生用のURLを作成してAudioにセット
-    const fileURL = URL.createObjectURL(track.fileBlob);
-    audioPlayer.src = fileURL;
-    
-    try {
-        await audioPlayer.play();
-    } catch (e) {
-        console.error("再生に失敗しました:", e);
-    }
-}
-
-// 次の曲へ
-function playNext() {
-    if (appState.currentQueue.length === 0) return;
-    appState.currentIndex++;
-    // リストの最後までいったら最初に戻る
-    if (appState.currentIndex >= appState.currentQueue.length) {
-        appState.currentIndex = 0; 
-    }
-    playTrack(appState.currentQueue[appState.currentIndex], appState.currentQueue);
-}
-
-// 前の曲へ
-function playPrev() {
-    if (appState.currentQueue.length === 0) return;
-    appState.currentIndex--;
-    // リストの最初から戻ろうとしたら最後に飛ぶ
-    if (appState.currentIndex < 0) {
-        appState.currentIndex = appState.currentQueue.length - 1;
-    }
-    playTrack(appState.currentQueue[appState.currentIndex], appState.currentQueue);
-}
-
-
-// ----------------------------------------------------
-// 既存の描画ロジック（サイドバー、編集画面）
-// ----------------------------------------------------
-function renderLibraryList(tracks) {
-    const libraryList = document.getElementById('my-library-list');
-    libraryList.innerHTML = '';
-
-    tracks.forEach(track => {
-        const li = document.createElement('li');
-        li.style.padding = '10px'; li.style.borderBottom = '1px solid var(--border-color)';
-        li.style.display = 'flex'; li.style.alignItems = 'center'; li.style.gap = '10px'; li.style.cursor = 'pointer';
-
-        if (track.thumbnailDataUrl) {
-            const img = document.createElement('img');
-            img.src = track.thumbnailDataUrl;
-            img.style.width = '30px'; img.style.height = '30px';
-            img.style.borderRadius = '4px'; img.style.objectFit = 'cover';
-            li.appendChild(img);
-        } else {
-            const icon = document.createElement('span');
-            icon.className = 'material-symbols-outlined';
-            icon.textContent = 'audio_file';
-            icon.style.color = 'var(--text-secondary)';
-            li.appendChild(icon);
-        }
-        
-        const info = document.createElement('div');
-        info.innerHTML = `<div style="font-weight:bold; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${track.title}</div>
-                          <div style="font-size:12px; color:var(--text-secondary);">${track.artist}</div>`;
-
+        li.appendChild(thumb);
         li.appendChild(info);
-        // サイドバーからクリックした場合も再生
-        li.addEventListener('click', () => playTrack(track, tracks));
-        libraryList.appendChild(li);
+
+        // クリックで再生
+        li.addEventListener('click', () => {
+            playTrack(index);
+        });
+
+        container.appendChild(li);
     });
 }
 
+// === プレイリスト機能 ===
+function initPlaylists() {
+    document.getElementById('create-playlist-btn').addEventListener('click', async () => {
+        const name = prompt("新しいプレイリストの名前を入力してください");
+        if (!name) return;
+        
+        const newList = {
+            id: 'pl_' + Date.now(),
+            name: name,
+            trackIds: [] // ここに曲のIDを保存します
+        };
+        
+        const transaction = db.transaction(['playlists'], 'readwrite');
+        transaction.objectStore('playlists').put(newList);
+        
+        await loadPlaylists();
+    });
+}
+
+function getAllPlaylistsFromDB() {
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(['playlists'], 'readonly');
+        const request = transaction.objectStore('playlists').getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = (e) => reject(e.target.error);
+    });
+}
+
+async function loadPlaylists() {
+    appState.playlists = await getAllPlaylistsFromDB();
+    const container = document.getElementById('playlists-container');
+    container.innerHTML = '';
+    
+    appState.playlists.forEach(pl => {
+        const li = document.createElement('li');
+        li.style.padding = '10px'; li.style.cursor = 'pointer'; li.style.borderBottom = '1px solid var(--border-color)';
+        li.innerHTML = `<span class="material-symbols-outlined">queue_music</span> ${pl.name} (${pl.trackIds.length}曲)`;
+        
+        // プレイリストをクリックした時の動作
+        li.addEventListener('click', () => {
+            document.getElementById('current-playlist-name').textContent = pl.name;
+            // プレイリスト内の曲だけを抽出
+            appState.currentQueue = appState.tracks.filter(t => pl.trackIds.includes(t.id));
+            renderMainTrackList();
+        });
+        container.appendChild(li);
+    });
+}
+
+// === 情報編集 ===
 function renderEditLibraryList(tracks) {
     const list = document.getElementById('edit-library-list');
     list.innerHTML = '';
@@ -391,7 +408,6 @@ function renderEditLibraryList(tracks) {
 function openEditForm(track) {
     document.getElementById('edit-form-area').style.display = 'flex';
     appState.editingTrackId = track.id;
-    
     document.getElementById('edit-title').value = track.title || '';
     document.getElementById('edit-artist').value = track.artist || '';
     document.getElementById('edit-date').value = track.date || '';
@@ -420,7 +436,6 @@ function getTagColorHex(str) {
 
 function initEditPage() {
     const tagInput = document.getElementById('edit-tags-input');
-    
     tagInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -437,7 +452,6 @@ function initEditPage() {
         if (!appState.editingTrackId) return;
         const track = appState.tracks.find(t => t.id === appState.editingTrackId);
         if (!track) return;
-
         track.title = document.getElementById('edit-title').value;
         track.artist = document.getElementById('edit-artist').value;
         track.date = document.getElementById('edit-date').value;
@@ -445,17 +459,11 @@ function initEditPage() {
 
         await saveTrackToDB(track);
         await loadLibrary();
-        
-        // もし現在再生中の曲を編集した場合は、プレイヤーの表示も更新
-        if (appState.currentTrack && appState.currentTrack.id === track.id) {
-            document.getElementById('player-title').textContent = track.title;
-            document.getElementById('player-artist').textContent = track.artist;
-        }
-
         alert('情報を保存しました！');
     });
 }
 
+// ★修正：タグの左側に色付きラインを表示
 function renderEditTags() {
     const list = document.getElementById('edit-tags-list');
     list.innerHTML = '';
@@ -463,6 +471,7 @@ function renderEditTags() {
     appState.editingTags.forEach((tagObj, index) => {
         const span = document.createElement('span');
         span.className = 'tag-item';
+        span.style.borderLeft = `4px solid ${tagObj.color}`; // 左側にカラーライン
         
         span.innerHTML = `
             ${tagObj.text} 
@@ -484,6 +493,7 @@ function renderEditTags() {
         picker.addEventListener('input', (e) => {
             const index = e.target.getAttribute('data-index');
             appState.editingTags[index].color = e.target.value; 
+            e.target.parentElement.style.borderLeft = `4px solid ${e.target.value}`; // 見た目も即反映
         });
     });
 }
