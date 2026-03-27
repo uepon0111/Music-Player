@@ -73,7 +73,6 @@
                                     <input type="checkbox" id="main-select-all" class="custom-checkbox">
                                     <label for="main-select-all" style="font-size: 14px; cursor: pointer; color: var(--text-secondary);">すべて選択</label>
                                 </div>
-
                                 <select id="main-sort-select" class="control-select">
                                     <option value="manual">手動 (デフォルト)</option>
                                     <option value="date_desc">追加日が新しい順</option>
@@ -108,8 +107,7 @@
             <div class="edit-container">
                 <div class="edit-header" style="display: flex; justify-content: space-between; align-items: center;">
                     <h2>楽曲情報の編集</h2>
-                    <button id="save-metadata-btn" class="primary-btn"><span class="material-symbols-outlined">save</span> 変更を保存</button>
-                </div>
+                    </div>
                 
                 <div class="edit-layout">
                     <div class="edit-sidebar">
@@ -153,6 +151,10 @@
                                     <div id="edit-tags-list" class="tags-list">
                                         </div>
                                 </div>
+                            </div>
+                            
+                            <div style="display: flex; justify-content: flex-end; margin-top: 24px;">
+                                <button id="save-metadata-btn" class="primary-btn"><span class="material-symbols-outlined">save</span> 変更を保存</button>
                             </div>
                         </div>
                     </div>
