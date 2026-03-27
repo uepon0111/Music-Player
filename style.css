@@ -101,3 +101,23 @@ body { background-color: var(--bg-main); color: var(--text-primary); display: fl
 .progress-container input[type="range"] { flex: 1; accent-color: var(--accent-color); }
 .volume-controls { width: 30%; min-width: 150px; display: flex; align-items: center; justify-content: flex-end; gap: 12px; color: var(--text-secondary); }
 .volume-controls input[type="range"] { width: 100px; accent-color: var(--text-secondary); }
+
+/* 追加：タグのカラーピッカースタイル */
+.tag-color-picker {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    background: transparent;
+    margin-left: 4px;
+}
+.tag-color-picker::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+.tag-color-picker::-webkit-color-swatch {
+    border: none;
+    border-radius: 50%;
+    box-shadow: 0 0 2px rgba(0,0,0,0.3);
+}
