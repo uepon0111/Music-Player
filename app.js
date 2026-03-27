@@ -1,11 +1,14 @@
 /**
  * app.js - Web Music Player
- * 第4弾: レスポンシブ対応、タグデザインの修正
+ * 第5弾: 音楽プレイヤー機能とプレイリスト表示の実装
  */
 
 const DB_NAME = 'MusicPlayerDB';
 const DB_VERSION = 3; 
 let db = null;
+
+// 音声再生用のAudioオブジェクトを作成
+const audioPlayer = new Audio();
 
 const appState = {
     tracks: [],
@@ -13,13 +16,17 @@ const appState = {
     currentTrack: null,
     isPlaying: false,
     editingTrackId: null,
-    editingTags: [] // {text: "タグ名", color: "#RRGGBB"} 
+    editingTags: [],
+    // プレイヤー用ステート
+    currentQueue: [], // 現在再生中のリスト
+    currentIndex: -1  // 現在再生中の曲のインデックス
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
     initNavigation();
     initDragAndDrop();
     initEditPage();
+    initPlayer(); // ★プレイヤーの初期化を追加
     
     try {
         await initDB();
@@ -118,7 +125,7 @@ async function handleFiles(files) {
 
         const newTrack = {
             id: 'track_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-            fileBlob: file,
+            fileBlob: file, // ここに音声データ本体が入っています
             fileName: file.name,
             title: meta.title || file.name.replace(/\.[^/.]+$/, ""),
             artist: meta.artist || "不明なアーティスト",
@@ -155,16 +162,190 @@ function getAllTracksFromDB() {
 
 async function loadLibrary() {
     appState.tracks = await getAllTracksFromDB();
-    renderLibraryList(appState.tracks);
-    renderEditLibraryList(appState.tracks);
+    const sortedTracks = [...appState.tracks].sort((a, b) => b.addedAt - a.addedAt);
+    
+    renderLibraryList(sortedTracks);     // 左サイドバー
+    renderEditLibraryList(sortedTracks); // 編集用リスト
+    renderCurrentPlaylistItems(sortedTracks); // 中央のメインリスト
 }
 
+// ----------------------------------------------------
+// ★ NEW: 中央のメインリスト描画（ここから再生可能）
+// ----------------------------------------------------
+function renderCurrentPlaylistItems(tracks) {
+    const list = document.getElementById('current-playlist-items');
+    list.innerHTML = '';
+
+    tracks.forEach((track, index) => {
+        const li = document.createElement('li');
+        li.style.padding = '12px 16px';
+        li.style.borderBottom = '1px solid var(--border-color)';
+        li.style.cursor = 'pointer';
+        li.style.display = 'flex';
+        li.style.alignItems = 'center';
+        li.style.gap = '16px';
+        li.style.transition = 'background-color 0.2s';
+        
+        // マウスホバーで背景色を変える
+        li.onmouseenter = () => li.style.backgroundColor = 'var(--bg-hover)';
+        li.onmouseleave = () => li.style.backgroundColor = 'transparent';
+
+        // タグを文字列に変換（色情報は無視してテキストだけ表示）
+        const tagsText = (track.tags || []).map(t => typeof t === 'object' ? t.text : t).join(', ');
+
+        li.innerHTML = `
+            <div style="width: 24px; text-align: right; color: var(--text-secondary); font-size: 14px;">${index + 1}</div>
+            <div style="flex: 1; overflow: hidden;">
+                <div style="font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${track.title}</div>
+                <div style="font-size: 12px; color: var(--text-secondary);">${track.artist}</div>
+            </div>
+            <div style="font-size: 12px; color: var(--text-secondary); width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right;">
+                ${tagsText}
+            </div>
+        `;
+
+        // 曲をクリックしたら再生
+        li.addEventListener('click', () => {
+            playTrack(track, tracks);
+        });
+        list.appendChild(li);
+    });
+}
+
+// ----------------------------------------------------
+// ★ NEW: プレイヤーの制御ロジック
+// ----------------------------------------------------
+function initPlayer() {
+    const playBtn = document.getElementById('ctrl-play');
+    const prevBtn = document.getElementById('ctrl-prev');
+    const nextBtn = document.getElementById('ctrl-next');
+    const seekBar = document.getElementById('seek-bar');
+    const volumeBar = document.getElementById('volume-bar');
+    const timeCurrent = document.getElementById('time-current');
+    const timeTotal = document.getElementById('time-total');
+
+    // 再生・一時停止ボタン
+    playBtn.addEventListener('click', () => {
+        if (!appState.currentTrack) return; // 曲が選ばれてなければ何もしない
+        if (audioPlayer.paused) {
+            audioPlayer.play();
+        } else {
+            audioPlayer.pause();
+        }
+    });
+
+    // オーディオの状態に合わせてアイコンを変更
+    audioPlayer.addEventListener('play', () => {
+        playBtn.innerHTML = '<span class="material-symbols-outlined">pause</span>';
+        appState.isPlaying = true;
+    });
+
+    audioPlayer.addEventListener('pause', () => {
+        playBtn.innerHTML = '<span class="material-symbols-outlined">play_arrow</span>';
+        appState.isPlaying = false;
+    });
+
+    // 再生位置の更新（シークバーと時間表示）
+    audioPlayer.addEventListener('timeupdate', () => {
+        if (audioPlayer.duration) {
+            const progressPercent = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+            seekBar.value = progressPercent;
+            timeCurrent.textContent = formatTime(audioPlayer.currentTime);
+            timeTotal.textContent = formatTime(audioPlayer.duration);
+        }
+    });
+
+    // 曲が終わったら次の曲へ
+    audioPlayer.addEventListener('ended', () => {
+        playNext();
+    });
+
+    // シークバーを動かした時
+    seekBar.addEventListener('input', (e) => {
+        if (audioPlayer.duration) {
+            const seekTime = (e.target.value / 100) * audioPlayer.duration;
+            audioPlayer.currentTime = seekTime;
+        }
+    });
+
+    // 音量バーを動かした時
+    volumeBar.addEventListener('input', (e) => {
+        audioPlayer.volume = e.target.value / 100;
+    });
+
+    prevBtn.addEventListener('click', playPrev);
+    nextBtn.addEventListener('click', playNext);
+}
+
+// 秒数を「分:秒」にフォーマット
+function formatTime(seconds) {
+    if (isNaN(seconds)) return "0:00";
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+// 曲を再生する関数
+async function playTrack(track, queue) {
+    appState.currentTrack = track;
+    appState.currentQueue = queue;
+    appState.currentIndex = queue.findIndex(t => t.id === track.id);
+
+    // 画面下部のプレイヤーの表示を更新
+    document.getElementById('player-title').textContent = track.title;
+    document.getElementById('player-artist').textContent = track.artist;
+    
+    const thumb = document.getElementById('player-thumbnail');
+    if (track.thumbnailDataUrl) {
+        thumb.style.backgroundImage = `url(${track.thumbnailDataUrl})`;
+        thumb.innerHTML = '';
+    } else {
+        thumb.style.backgroundImage = 'none';
+        thumb.innerHTML = '<span class="material-symbols-outlined">music_note</span>';
+    }
+
+    // Blob（ファイルデータ）から再生用のURLを作成してAudioにセット
+    const fileURL = URL.createObjectURL(track.fileBlob);
+    audioPlayer.src = fileURL;
+    
+    try {
+        await audioPlayer.play();
+    } catch (e) {
+        console.error("再生に失敗しました:", e);
+    }
+}
+
+// 次の曲へ
+function playNext() {
+    if (appState.currentQueue.length === 0) return;
+    appState.currentIndex++;
+    // リストの最後までいったら最初に戻る
+    if (appState.currentIndex >= appState.currentQueue.length) {
+        appState.currentIndex = 0; 
+    }
+    playTrack(appState.currentQueue[appState.currentIndex], appState.currentQueue);
+}
+
+// 前の曲へ
+function playPrev() {
+    if (appState.currentQueue.length === 0) return;
+    appState.currentIndex--;
+    // リストの最初から戻ろうとしたら最後に飛ぶ
+    if (appState.currentIndex < 0) {
+        appState.currentIndex = appState.currentQueue.length - 1;
+    }
+    playTrack(appState.currentQueue[appState.currentIndex], appState.currentQueue);
+}
+
+
+// ----------------------------------------------------
+// 既存の描画ロジック（サイドバー、編集画面）
+// ----------------------------------------------------
 function renderLibraryList(tracks) {
     const libraryList = document.getElementById('my-library-list');
     libraryList.innerHTML = '';
-    const sortedTracks = [...tracks].sort((a, b) => b.addedAt - a.addedAt);
 
-    sortedTracks.forEach(track => {
+    tracks.forEach(track => {
         const li = document.createElement('li');
         li.style.padding = '10px'; li.style.borderBottom = '1px solid var(--border-color)';
         li.style.display = 'flex'; li.style.alignItems = 'center'; li.style.gap = '10px'; li.style.cursor = 'pointer';
@@ -188,6 +369,8 @@ function renderLibraryList(tracks) {
                           <div style="font-size:12px; color:var(--text-secondary);">${track.artist}</div>`;
 
         li.appendChild(info);
+        // サイドバーからクリックした場合も再生
+        li.addEventListener('click', () => playTrack(track, tracks));
         libraryList.appendChild(li);
     });
 }
@@ -262,11 +445,17 @@ function initEditPage() {
 
         await saveTrackToDB(track);
         await loadLibrary();
+        
+        // もし現在再生中の曲を編集した場合は、プレイヤーの表示も更新
+        if (appState.currentTrack && appState.currentTrack.id === track.id) {
+            document.getElementById('player-title').textContent = track.title;
+            document.getElementById('player-artist').textContent = track.artist;
+        }
+
         alert('情報を保存しました！');
     });
 }
 
-// ★修正: タグ全体の背景色を変えず、カラーピッカーのアイコンだけが変わるようにしました
 function renderEditTags() {
     const list = document.getElementById('edit-tags-list');
     list.innerHTML = '';
@@ -274,7 +463,6 @@ function renderEditTags() {
     appState.editingTags.forEach((tagObj, index) => {
         const span = document.createElement('span');
         span.className = 'tag-item';
-        // span.style.backgroundColor = tagObj.color; <- ここを削除しました
         
         span.innerHTML = `
             ${tagObj.text} 
@@ -292,7 +480,6 @@ function renderEditTags() {
         });
     });
 
-    // カラーピッカーの値が変更されたらデータだけを更新し、背景色は変えない
     document.querySelectorAll('.tag-color-picker').forEach(picker => {
         picker.addEventListener('input', (e) => {
             const index = e.target.getAttribute('data-index');
