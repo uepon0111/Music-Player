@@ -2,8 +2,9 @@
  * app.js - Web Music Player
  */
 
-// ★ 取得したクライアントIDを以下に必ず貼り付けてください
+// ★ 設定箇所はここ1つだけです。取得したクライアントIDに書き換えてください。
 const GOOGLE_CLIENT_ID = '963318517208-gjqi9k8d5v6qr8hk1a4jm54cpdc2i03q.apps.googleusercontent.com';
+
 const SYNC_FOLDER_NAME = 'WebMusicPlayer_Sync'; // Drive内に作成されるフォルダ名
 
 const DB_NAME = 'MusicPlayerDB';
@@ -13,7 +14,7 @@ let db = null;
 const audioPlayer = new Audio();
 let currentObjectUrl = null;
 
-let tokenClient;
+let tokenClient = null;
 let gapiAccessToken = null;
 
 const appState = {
@@ -88,25 +89,34 @@ function initAuthUI() {
     const btnLogout = document.getElementById('btn-logout');
     const btnSync = document.getElementById('btn-sync');
 
-    if (typeof google !== 'undefined' && google.accounts) {
-        tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: GOOGLE_CLIENT_ID,
-            scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile',
-            callback: (tokenResponse) => {
-                if (tokenResponse && tokenResponse.access_token) {
-                    gapiAccessToken = tokenResponse.access_token;
-                    appState.isLoggedIn = true;
-                    fetchUserInfo(gapiAccessToken);
-                }
-            },
-        });
-    }
-
     btnLogin.addEventListener('click', () => {
-        if (GOOGLE_CLIENT_ID === '963318517208-gjqi9k8d5v6qr8hk1a4jm54cpdc2i03q.apps.googleusercontent.com' || !GOOGLE_CLIENT_ID) {
-            alert('963318517208-gjqi9k8d5v6qr8hk1a4jm54cpdc2i03q.apps.googleusercontent.com');
+        // IDが設定されているかのチェック
+        if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID === 'ここにクライアントIDを貼り付けてください') {
+            alert('コードの1行目にある GOOGLE_CLIENT_ID をご自身のものに書き換えてください。');
             return;
         }
+
+        // Google APIが読み込まれるまで待機
+        if (typeof google === 'undefined' || !google.accounts) {
+            alert('Google認証システムを読み込み中です。数秒待ってから再度クリックしてください。');
+            return;
+        }
+
+        // tokenClientが未作成なら初期化する
+        if (!tokenClient) {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: GOOGLE_CLIENT_ID,
+                scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile',
+                callback: (tokenResponse) => {
+                    if (tokenResponse && tokenResponse.access_token) {
+                        gapiAccessToken = tokenResponse.access_token;
+                        appState.isLoggedIn = true;
+                        fetchUserInfo(gapiAccessToken);
+                    }
+                },
+            });
+        }
+
         tokenClient.requestAccessToken();
     });
 
@@ -174,12 +184,10 @@ async function performDriveSync() {
         // 2. 音声ファイルのアップロード（未アップロードのもののみ）
         let uploadedCount = 0;
         for (let track of appState.tracks) {
-            // fileBlobが存在し、かつDriveのIDを持っていない場合のみアップロード
             if (track.fileBlob && !track.driveFileId) {
                 console.log(`アップロード中: ${track.title}`);
                 const driveFileId = await uploadFileToDrive(track.fileBlob, track.fileName, track.fileBlob.type, folderId);
                 
-                // アップロード完了後、IDを保存
                 track.driveFileId = driveFileId;
                 await saveTrackToDB(track); 
                 uploadedCount++;
@@ -189,8 +197,7 @@ async function performDriveSync() {
         // 3. JSONファイル（曲情報＋プレイリスト情報）の生成とアップロード
         const syncData = {
             tracks: appState.tracks.map(t => {
-                // JSONサイズを抑えるため、Blob自体は除外して保存
-                const { fileBlob, ...rest } = t;
+                const { fileBlob, ...rest } = t; // Blob自体は除外して保存
                 return rest;
             }),
             playlists: appState.playlists,
@@ -200,7 +207,6 @@ async function performDriveSync() {
         const jsonString = JSON.stringify(syncData);
         const jsonBlob = new Blob([jsonString], { type: 'application/json' });
         
-        // library_sync.jsonが既に存在するか検索
         const existingJsonId = await findDriveFile('library_sync.json', 'application/json', folderId);
         await uploadFileToDrive(jsonBlob, 'library_sync.json', 'application/json', folderId, existingJsonId);
 
@@ -218,8 +224,6 @@ async function performDriveSync() {
 }
 
 // === Drive API ヘルパー関数 ===
-
-// フォルダを検索し、なければ作成してIDを返す
 async function getOrCreateSyncFolder() {
     const existingId = await findDriveFile(SYNC_FOLDER_NAME, 'application/vnd.google-apps.folder');
     if (existingId) return existingId;
@@ -236,7 +240,6 @@ async function getOrCreateSyncFolder() {
     return data.id;
 }
 
-// 指定した名前とMIMEタイプのファイル/フォルダを検索
 async function findDriveFile(name, mimeType, parentId = null) {
     let q = `name='${name}' and trashed=false`;
     if (mimeType) q += ` and mimeType='${mimeType}'`;
@@ -249,11 +252,9 @@ async function findDriveFile(name, mimeType, parentId = null) {
     return (data.files && data.files.length > 0) ? data.files[0].id : null;
 }
 
-// ファイルのアップロード（2段階方式: メタデータ作成 → コンテンツ送信）
 async function uploadFileToDrive(blob, filename, mimeType, folderId, existingId = null) {
     let fileId = existingId;
     
-    // 1. 新規の場合はまずメタデータを作成してIDを取得
     if (!fileId) {
         const metaRes = await fetch('https://www.googleapis.com/drive/v3/files', {
             method: 'POST',
@@ -267,7 +268,6 @@ async function uploadFileToDrive(blob, filename, mimeType, folderId, existingId 
         fileId = meta.id;
     }
 
-    // 2. 取得したIDに対してメディア(実データ)をアップロード
     await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
         method: 'PATCH',
         headers: {
@@ -283,7 +283,6 @@ async function uploadFileToDrive(blob, filename, mimeType, folderId, existingId 
 // ----------------------------------------------------
 // DB処理 & その他の機能
 // ----------------------------------------------------
-
 function initPlaylistPlaybackControls() {
     const btnPlayAll = document.getElementById('btn-play-all');
     const btnShuffleAll = document.getElementById('btn-shuffle-all');
@@ -566,7 +565,7 @@ async function handleFiles(files) {
             artist: meta.artist || "不明なアーティスト",
             date: "", tags: [], thumbnailDataUrl: meta.picture || null, 
             addedAt: Date.now(), sortOrder: Date.now(),
-            driveFileId: null // 新規追加時はDrive未アップロード
+            driveFileId: null 
         };
         await saveTrackToDB(newTrack);
     }
