@@ -1,6 +1,5 @@
 /**
  * app.js - Web Music Player
- * 第8弾: 検索、並び替え、複数選択による一括処理（追加/削除/タグ付け/完全削除）
  */
 
 const DB_NAME = 'MusicPlayerDB';
@@ -19,12 +18,10 @@ const appState = {
     allKnownTags: new Map(),
     currentPlaylistId: null,
     
-    // ★追加: 検索・ソート・選択状態の管理
     searchQueryMain: "",
-    sortModeMain: "date_desc", // date_desc, date_asc, name_asc, name_desc, artist_asc
+    sortModeMain: "manual", // ★変更: デフォルトを手動に
     selectedMainTracks: new Set(),
     
-    // ★追加: 編集画面用の状態
     searchQueryEdit: "",
     selectedEditTracks: new Set(),
     editingTags: []
@@ -62,10 +59,11 @@ function initNavigation() {
                 page.classList.toggle('active', page.id === targetId);
             });
             
-            // ページ切り替え時に選択状態をリセット
+            // ページ切り替え時にメイン画面の選択状態をリセット
             appState.selectedMainTracks.clear();
-            appState.selectedEditTracks.clear();
             updateBulkActionBar();
+            
+            // 編集画面に切り替わった時にリストを描画
             if(targetId === 'edit') renderEditLibraryList();
         });
     });
@@ -85,9 +83,7 @@ function initDB() {
     });
 }
 
-// === ★検索と並び替えの初期化 ===
 function initSearchAndSort() {
-    // メイン画面の検索
     const mainSearch = document.getElementById('main-search-input');
     if (mainSearch) {
         mainSearch.addEventListener('input', (e) => {
@@ -96,7 +92,6 @@ function initSearchAndSort() {
         });
     }
 
-    // メイン画面のソート
     const sortSelect = document.getElementById('main-sort-select');
     if (sortSelect) {
         sortSelect.addEventListener('change', (e) => {
@@ -105,7 +100,19 @@ function initSearchAndSort() {
         });
     }
 
-    // 編集画面の検索
+    // ★追加: すべて選択/選択解除の処理
+    const selectAllCheckbox = document.getElementById('main-select-all');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                appState.currentQueue.forEach(t => appState.selectedMainTracks.add(t.id));
+            } else {
+                appState.selectedMainTracks.clear();
+            }
+            renderMainTrackList();
+        });
+    }
+
     const editSearch = document.getElementById('edit-search-input');
     if (editSearch) {
         editSearch.addEventListener('input', (e) => {
@@ -115,7 +122,6 @@ function initSearchAndSort() {
     }
 }
 
-// リストのフィルタリングとソートを実行して描画
 function updateMainQueue() {
     let baseList = [];
     if (!appState.currentPlaylistId) {
@@ -123,7 +129,6 @@ function updateMainQueue() {
     } else {
         const pl = appState.playlists.find(p => p.id === appState.currentPlaylistId);
         if (pl) {
-            // プレイリストの並び順（追加された順）を維持しつつトラックを取得
             baseList = pl.trackIds.map(id => appState.tracks.find(t => t.id === id)).filter(Boolean);
         }
     }
@@ -141,22 +146,28 @@ function updateMainQueue() {
         });
     }
 
-    // ソート
-    baseList.sort((a, b) => {
-        switch (appState.sortModeMain) {
-            case 'date_desc': return b.addedAt - a.addedAt;
-            case 'date_asc': return a.addedAt - b.addedAt;
-            case 'name_asc': return a.title.localeCompare(b.title);
-            case 'name_desc': return b.title.localeCompare(a.title);
-            case 'artist_asc': return a.artist.localeCompare(b.artist);
-            default: return 0;
-        }
-    });
+    // ★変更: ソート（種類追加）
+    if (appState.sortModeMain === 'random') {
+        baseList.sort(() => Math.random() - 0.5); // ランダム
+    } else if (appState.sortModeMain !== 'manual') {
+        baseList.sort((a, b) => {
+            switch (appState.sortModeMain) {
+                case 'date_desc': return b.addedAt - a.addedAt;
+                case 'date_asc': return a.addedAt - b.addedAt;
+                case 'name_asc': return a.title.localeCompare(b.title);
+                case 'name_desc': return b.title.localeCompare(a.title);
+                case 'artist_asc': return (a.artist||'').localeCompare(b.artist||'');
+                case 'artist_desc': return (b.artist||'').localeCompare(a.artist||'');
+                case 'release_desc': return (b.date||'').localeCompare(a.date||'');
+                case 'release_asc': return (a.date||'').localeCompare(b.date||'');
+                default: return 0;
+            }
+        });
+    }
 
     appState.currentQueue = baseList;
     renderMainTrackList();
 }
-
 
 function initPlayerControls() {
     const playBtn = document.getElementById('ctrl-play');
@@ -351,7 +362,7 @@ async function loadLibrary() {
     });
     updateTagsDatalist();
 
-    updateMainQueue(); // ★検索・ソートを適用して再描画
+    updateMainQueue();
     renderSidebarLibrary();
     renderEditLibraryList();
 }
@@ -388,11 +399,18 @@ function renderSidebarLibrary() {
     list.appendChild(allItem);
 }
 
-// ★メイン画面のリスト描画（チェックボックス追加）
 function renderMainTrackList() {
     const container = document.getElementById('current-playlist-items');
     container.innerHTML = '';
     
+    // ★追加: 「すべて選択」チェックボックスの状態を同期
+    const selectAllCb = document.getElementById('main-select-all');
+    if (appState.currentQueue.length > 0 && appState.selectedMainTracks.size === appState.currentQueue.length) {
+        selectAllCb.checked = true;
+    } else {
+        selectAllCb.checked = false;
+    }
+
     updateBulkActionBar();
 
     appState.currentQueue.forEach((track, index) => {
@@ -400,7 +418,6 @@ function renderMainTrackList() {
         li.className = 'track-list-item';
         if (appState.isPlaying && appState.currentTrackIndex === index) li.classList.add('playing');
 
-        // ★チェックボックス
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.className = 'custom-checkbox';
@@ -409,7 +426,7 @@ function renderMainTrackList() {
         checkbox.addEventListener('change', (e) => {
             if (e.target.checked) appState.selectedMainTracks.add(track.id);
             else appState.selectedMainTracks.delete(track.id);
-            updateBulkActionBar();
+            renderMainTrackList(); // 全体を描画し直して状態を同期
         });
 
         const thumb = document.createElement('div');
@@ -449,9 +466,20 @@ function renderMainTrackList() {
         addBtn.title = 'プレイリストに追加';
         addBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            openAddToPlaylistModal([track.id]); // 配列で渡す
+            openAddToPlaylistModal([track.id]); 
         });
         actions.appendChild(addBtn);
+
+        // ★追加: 個別の「編集」ボタン
+        const editBtn = document.createElement('button');
+        editBtn.className = 'icon-btn';
+        editBtn.innerHTML = '<span class="material-symbols-outlined">edit</span>';
+        editBtn.title = '情報を編集';
+        editBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            jumpToEdit([track.id]);
+        });
+        actions.appendChild(editBtn);
 
         if (appState.currentPlaylistId) {
             const removeBtn = document.createElement('button');
@@ -465,7 +493,6 @@ function renderMainTrackList() {
             actions.appendChild(removeBtn);
         }
 
-        // 個別・完全削除ボタン
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'icon-btn';
         deleteBtn.innerHTML = '<span class="material-symbols-outlined">delete_forever</span>';
@@ -476,20 +503,17 @@ function renderMainTrackList() {
         });
         actions.appendChild(deleteBtn);
 
-        li.appendChild(checkbox); // 追加
+        li.appendChild(checkbox); 
         li.appendChild(thumb);
         li.appendChild(info);
         li.appendChild(actions); 
         
-        // 曲情報の領域をクリックした時だけ再生（チェックボックス等は除く）
         info.addEventListener('click', () => playTrack(index));
         thumb.addEventListener('click', () => playTrack(index));
         
         container.appendChild(li);
     });
 }
-
-// === ★一括操作機能（バルクアクション） ===
 
 function updateBulkActionBar() {
     const bar = document.getElementById('bulk-actions-bar');
@@ -500,7 +524,6 @@ function updateBulkActionBar() {
         bar.classList.add('active');
         countSpan.textContent = `${count}曲を選択中`;
         
-        // プレイリスト表示中のみ「リストから外す」を表示
         const btnRemove = document.getElementById('bulk-remove-playlist-btn');
         btnRemove.style.display = appState.currentPlaylistId ? 'inline-flex' : 'none';
     } else {
@@ -508,9 +531,24 @@ function updateBulkActionBar() {
     }
 }
 
+// ★追加: 編集画面へジャンプする処理
+function jumpToEdit(trackIdsArray) {
+    appState.selectedEditTracks.clear();
+    trackIdsArray.forEach(id => appState.selectedEditTracks.add(id));
+    
+    // 編集タブをクリックした状態をエミュレート
+    const editTabBtn = document.querySelector('.nav-btn[data-target="edit"]');
+    if(editTabBtn) editTabBtn.click();
+}
+
 function initBulkActions() {
     document.getElementById('bulk-add-playlist-btn').addEventListener('click', () => {
         openAddToPlaylistModal(Array.from(appState.selectedMainTracks));
+    });
+
+    // ★追加: 一括操作の編集ボタン
+    document.getElementById('bulk-edit-btn').addEventListener('click', () => {
+        jumpToEdit(Array.from(appState.selectedMainTracks));
     });
 
     document.getElementById('bulk-remove-playlist-btn').addEventListener('click', () => {
@@ -531,7 +569,6 @@ async function deleteTracksCompletely(trackIds) {
     const tracksStore = transaction.objectStore('tracks');
     const playlistsStore = transaction.objectStore('playlists');
 
-    // 1. 各プレイリストからもIDを削除
     const playlistsRequest = playlistsStore.getAll();
     playlistsRequest.onsuccess = () => {
         const playlists = playlistsRequest.result;
@@ -548,7 +585,6 @@ async function deleteTracksCompletely(trackIds) {
         });
     };
 
-    // 2. トラック自体を削除
     trackIds.forEach(id => tracksStore.delete(id));
 
     transaction.oncomplete = async () => {
@@ -558,7 +594,6 @@ async function deleteTracksCompletely(trackIds) {
         await loadLibrary();
     };
 }
-
 
 function initPlaylists() {
     document.getElementById('create-playlist-btn').addEventListener('click', async () => {
@@ -615,7 +650,6 @@ async function loadPlaylists() {
     });
 }
 
-// 配列対応版のプレイリスト追加
 function openAddToPlaylistModal(trackIdsArray) {
     if (appState.playlists.length === 0) {
         alert("プレイリストがまだありません。左のメニューから作成してください。");
@@ -718,12 +752,10 @@ async function deletePlaylist(playlistId, playlistName) {
     };
 }
 
-// === ★情報編集 (検索・複数選択・タグ表示) ===
 function renderEditLibraryList() {
     const list = document.getElementById('edit-library-list');
     list.innerHTML = '';
     
-    // 検索フィルタリング
     let displayTracks = appState.tracks;
     if (appState.searchQueryEdit) {
         displayTracks = displayTracks.filter(t => 
@@ -732,7 +764,6 @@ function renderEditLibraryList() {
         );
     }
 
-    // 「すべて選択」ボタンのようなものをヘッダーに置くのもありですが、今回はシンプルにチェックボックスのみ
     document.getElementById('edit-selected-count').textContent = 
         appState.selectedEditTracks.size > 0 ? `${appState.selectedEditTracks.size}曲を選択中` : '曲を選択して編集';
 
@@ -749,20 +780,7 @@ function renderEditLibraryList() {
             if(e.target.checked) appState.selectedEditTracks.add(track.id);
             else appState.selectedEditTracks.delete(track.id);
             
-            // 1曲だけ選ばれた時は、その曲の情報をフォームに自動入力する
-            if (appState.selectedEditTracks.size === 1) {
-                const singleId = Array.from(appState.selectedEditTracks)[0];
-                const t = appState.tracks.find(x => x.id === singleId);
-                openEditForm(t);
-            } else if (appState.selectedEditTracks.size > 1) {
-                // 複数選択時はフォームを「複数編集モード」にする
-                openBulkEditForm();
-            } else {
-                clearEditForm();
-            }
-            
-            document.getElementById('edit-selected-count').textContent = 
-                appState.selectedEditTracks.size > 0 ? `${appState.selectedEditTracks.size}曲を選択中` : '曲を選択して編集';
+            checkEditFormState();
         });
 
         const content = document.createElement('div');
@@ -787,13 +805,31 @@ function renderEditLibraryList() {
         li.appendChild(checkbox);
         li.appendChild(content);
         
-        // テキスト部分クリックでチェックボックスのオンオフを切り替え
         content.addEventListener('click', () => {
             checkbox.click();
         });
 
         list.appendChild(li);
     });
+    
+    // 初回描画時にもフォームの状態をチェック（プレイヤー画面からジャンプしてきた時用）
+    checkEditFormState();
+}
+
+// 編集フォームの表示状態を制御する処理を分離
+function checkEditFormState() {
+    document.getElementById('edit-selected-count').textContent = 
+        appState.selectedEditTracks.size > 0 ? `${appState.selectedEditTracks.size}曲を選択中` : '曲を選択して編集';
+
+    if (appState.selectedEditTracks.size === 1) {
+        const singleId = Array.from(appState.selectedEditTracks)[0];
+        const t = appState.tracks.find(x => x.id === singleId);
+        openEditForm(t);
+    } else if (appState.selectedEditTracks.size > 1) {
+        openBulkEditForm();
+    } else {
+        clearEditForm();
+    }
 }
 
 function clearEditForm() {
@@ -822,17 +858,15 @@ function openEditForm(track) {
     }
 }
 
-// 複数選択時のフォーム表示
 function openBulkEditForm() {
     document.getElementById('edit-form-area').style.display = 'flex';
     document.getElementById('edit-title').value = '（複数選択中のため変更不可）';
     document.getElementById('edit-title').disabled = true;
     
-    // アーティストや日付は空にしておき、入力されたら上書きする仕様にする
     document.getElementById('edit-artist').value = '';
     document.getElementById('edit-date').value = '';
     
-    appState.editingTags = []; // タグは空からスタートし、追加したタグを全曲に付与する
+    appState.editingTags = []; 
     renderEditTags();
 
     const preview = document.getElementById('edit-thumbnail-preview');
@@ -877,18 +911,15 @@ function initEditPage() {
         appState.selectedEditTracks.forEach(id => {
             const track = appState.tracks.find(t => t.id === id);
             if (track) {
-                // 単一編集ならタイトルも更新
                 if (!isBulk) {
                     track.title = document.getElementById('edit-title').value;
                     track.artist = newArtist;
                     track.date = newDate;
                     track.tags = [...appState.editingTags];
                 } else {
-                    // 複数編集なら、入力された項目だけ上書き、タグは「追加」する
                     if (newArtist) track.artist = newArtist;
                     if (newDate) track.date = newDate;
                     
-                    // 既存タグに新しいタグを結合（重複排除）
                     let combinedTags = [...(track.tags || [])];
                     appState.editingTags.forEach(newTag => {
                         const exists = combinedTags.find(t => (typeof t === 'string' ? t : t.text) === newTag.text);
