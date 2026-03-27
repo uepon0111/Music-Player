@@ -103,8 +103,8 @@ function initAuthUI() {
     }
 
     btnLogin.addEventListener('click', () => {
-        if (GOOGLE_CLIENT_ID === 'ここに取得したクライアントIDを貼り付けます' || !GOOGLE_CLIENT_ID) {
-            alert('コード内の GOOGLE_CLIENT_ID を設定してください。');
+        if (GOOGLE_CLIENT_ID === '963318517208-gjqi9k8d5v6qr8hk1a4jm54cpdc2i03q.apps.googleusercontent.com' || !GOOGLE_CLIENT_ID) {
+            alert('963318517208-gjqi9k8d5v6qr8hk1a4jm54cpdc2i03q.apps.googleusercontent.com');
             return;
         }
         tokenClient.requestAccessToken();
