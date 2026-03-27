@@ -49,6 +49,13 @@ body { background-color: var(--bg-main); color: var(--text-primary); display: fl
 .search-bar { display: flex; align-items: center; background-color: var(--bg-main); border: 1px solid var(--border-color); border-radius: 20px; padding: 6px 12px; margin-top: 12px; }
 .search-bar input { border: none; outline: none; width: 100%; margin-left: 8px; background: transparent; }
 .item-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+
+/* ★プレイリストアイテムのスタイル */
+.playlist-item { padding: 10px; cursor: pointer; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; }
+.playlist-item:hover { background-color: var(--bg-hover); }
+.playlist-item .remove-playlist { color: var(--text-secondary); font-size: 18px; padding: 4px; border-radius: 4px; transition: 0.2s; }
+.playlist-item .remove-playlist:hover { color: red; background-color: #ffe6e6; }
+
 .content-area { flex: 1; padding: 24px; display: flex; flex-direction: column; overflow-y: auto; }
 .current-playlist-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 16px; border-bottom: 1px solid var(--border-color); margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
 .playlist-controls { display: flex; align-items: center; gap: 12px; }
@@ -69,40 +76,22 @@ body { background-color: var(--bg-main); color: var(--text-primary); display: fl
 .form-group input[type="text"], .form-group input[type="date"] { padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; outline: none; }
 .form-group input:focus { border-color: var(--accent-color); }
 
-/* ★タグのスタイル（デザイン変更・省略対応） */
+/* タグのスタイル */
 .tags-input-container { border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; background: var(--bg-main); }
 .tags-input-container input { border: none; outline: none; width: 100%; padding: 4px; margin-bottom: 8px; }
 .tags-list { display: flex; flex-wrap: wrap; gap: 8px; }
 
-.tag-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    border-radius: 16px;
-    font-size: 12px;
-    font-weight: bold;
-    color: #333;
-    max-width: 150px; /* 長い場合は省略 */
-}
-.tag-text-content {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    cursor: pointer; /* クリックで編集可能に */
-}
+.tag-item { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 16px; font-size: 12px; font-weight: bold; color: #333; max-width: 150px; }
+.tag-text-content { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .tag-text-content:hover { text-decoration: underline; }
 .tag-item .remove-tag { cursor: pointer; font-size: 14px; color: var(--text-secondary); flex-shrink: 0; }
 .tag-item .remove-tag:hover { color: red; }
 
-/* ★タグ編集用モーダル画面 */
-.tag-edit-modal {
-    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-    background: rgba(0,0,0,0.4); display: flex; justify-content: center; align-items: center; z-index: 1000;
-}
-.tag-edit-content {
-    background: white; padding: 20px; border-radius: 8px; display: flex; flex-direction: column; gap: 12px; width: 260px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
+/* 共通モーダルスタイル (タグ編集 & プレイリスト選択) */
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.4); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+.modal-content { background: white; padding: 20px; border-radius: 8px; display: flex; flex-direction: column; gap: 12px; width: 280px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 80vh; overflow-y: auto; }
+.modal-playlist-item { padding: 10px; border-bottom: 1px solid var(--border-color); cursor: pointer; display: flex; align-items: center; gap: 8px; }
+.modal-playlist-item:hover { background-color: var(--bg-hover); color: var(--accent-color); }
 
 /* メイン画面の曲リスト */
 .track-list { list-style: none; display: flex; flex-direction: column; }
@@ -113,18 +102,11 @@ body { background-color: var(--bg-main); color: var(--text-primary); display: fl
 .track-list-title { font-weight: bold; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .track-list-artist { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
 .track-list-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.track-list-tag { font-size: 10px; padding: 2px 8px; border-radius: 10px; display: inline-block; max-width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* プレイヤー画面のタグデザイン */
-.track-list-tag {
-    font-size: 10px;
-    padding: 2px 8px;
-    border-radius: 10px;
-    display: inline-block;
-    max-width: 100px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
+/* ★曲リストの右側のアクションボタンエリア */
+.track-actions { display: flex; gap: 4px; opacity: 0; transition: opacity 0.2s; }
+.track-list-item:hover .track-actions { opacity: 1; } /* ホバー時のみ表示してスッキリさせる */
 
 /* ログページ */
 .log-container { max-width: 1000px; margin: 0 auto; padding: 40px 20px; }
@@ -158,22 +140,19 @@ body { background-color: var(--bg-main); color: var(--text-primary); display: fl
     .nav-links { gap: 4px; }
     .nav-btn span:not(.material-symbols-outlined) { display: none; }
     .nav-btn { padding: 8px; }
-
     .layout-container { flex-direction: column; }
     .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border-color); height: 250px; flex-shrink: 0; padding: 12px; }
     .content-area { padding: 12px; }
-
     .edit-container { padding: 20px 10px; }
     .edit-layout { flex-direction: column; height: auto; gap: 20px; }
     .edit-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border-color); padding-right: 0; padding-bottom: 20px; max-height: 200px; }
     .edit-main-area { flex-direction: column; align-items: center; gap: 20px; }
-
     .log-container { padding: 20px 10px; }
-
     :root { --player-height: 120px; }
     .global-player { flex-wrap: wrap; padding: 8px 12px; justify-content: space-between; align-content: center; }
     .track-info { width: calc(100% - 120px); min-width: auto; } 
     .volume-controls { width: 100px; min-width: auto; }
     .player-controls { width: 100%; order: 3; margin-top: 8px; } 
     .progress-container { max-width: 100%; }
+    .track-actions { opacity: 1; } /* スマホでは常に表示 */
 }
