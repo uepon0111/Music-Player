@@ -1,6 +1,6 @@
 /**
  * app.js - Web Music Player
- * 第6弾: タグの省略表示、編集UIの改善、プレイヤー画面のタグ色反映
+ * 第6弾: タグデザインの改良、名前編集、既存タグのサジェスト機能
  */
 
 const DB_NAME = 'MusicPlayerDB';
@@ -13,7 +13,7 @@ let currentObjectUrl = null;
 const appState = {
     tracks: [],
     playlists: [],
-    currentQueue: [], 
+    currentQueue: [],
     currentTrackIndex: -1,
     isPlaying: false,
     editingTrackId: null,
@@ -79,9 +79,7 @@ function initPlayerControls() {
     prevBtn.addEventListener('click', playPrev);
 
     seekBar.addEventListener('input', (e) => {
-        if (audioPlayer.duration) {
-            audioPlayer.currentTime = (e.target.value / 100) * audioPlayer.duration;
-        }
+        if (audioPlayer.duration) audioPlayer.currentTime = (e.target.value / 100) * audioPlayer.duration;
     });
 
     volumeBar.addEventListener('input', (e) => {
@@ -109,7 +107,6 @@ function formatTime(seconds) {
 
 function playTrack(index) {
     if (index < 0 || index >= appState.currentQueue.length) return;
-    
     const track = appState.currentQueue[index];
     appState.currentTrackIndex = index;
 
@@ -128,7 +125,6 @@ function playTrack(index) {
 
 function togglePlay() {
     if (appState.currentQueue.length === 0) return;
-    
     if (appState.isPlaying) {
         audioPlayer.pause();
         appState.isPlaying = false;
@@ -275,6 +271,7 @@ function renderSidebarLibrary() {
     list.appendChild(allItem);
 }
 
+// ★修正：プレイヤー画面のタグにも色（左端のカラーライン）を反映
 function renderMainTrackList() {
     const container = document.getElementById('current-playlist-items');
     container.innerHTML = '';
@@ -304,10 +301,8 @@ function renderMainTrackList() {
         if (track.tags && track.tags.length > 0) {
             tagsHtml = `<div class="track-list-tags">` + 
                 track.tags.map(t => {
-                    const tObj = typeof t === 'string' ? {text: t, color: getTagColorHex(t)} : t;
-                    // ★修正：背景色を20%の透明度で適用し、より見やすく
-                    const bgColor = tObj.color + '33'; 
-                    return `<span class="track-list-tag" style="border-left: 3px solid ${tObj.color}; background-color: ${bgColor};" title="${tObj.text}">${tObj.text}</span>`;
+                    const tObj = typeof t === 'string' ? {text: t, color: '#ccc'} : t;
+                    return `<span class="track-list-tag" style="border-left: 3px solid ${tObj.color}; padding-left: 6px;">${tObj.text}</span>`;
                 }).join('') + `</div>`;
         }
 
@@ -319,11 +314,7 @@ function renderMainTrackList() {
 
         li.appendChild(thumb);
         li.appendChild(info);
-
-        li.addEventListener('click', () => {
-            playTrack(index);
-        });
-
+        li.addEventListener('click', () => playTrack(index));
         container.appendChild(li);
     });
 }
@@ -332,16 +323,9 @@ function initPlaylists() {
     document.getElementById('create-playlist-btn').addEventListener('click', async () => {
         const name = prompt("新しいプレイリストの名前を入力してください");
         if (!name) return;
-        
-        const newList = {
-            id: 'pl_' + Date.now(),
-            name: name,
-            trackIds: [] 
-        };
-        
+        const newList = { id: 'pl_' + Date.now(), name: name, trackIds: [] };
         const transaction = db.transaction(['playlists'], 'readwrite');
         transaction.objectStore('playlists').put(newList);
-        
         await loadPlaylists();
     });
 }
@@ -364,7 +348,6 @@ async function loadPlaylists() {
         const li = document.createElement('li');
         li.style.padding = '10px'; li.style.cursor = 'pointer'; li.style.borderBottom = '1px solid var(--border-color)';
         li.innerHTML = `<span class="material-symbols-outlined">queue_music</span> ${pl.name} (${pl.trackIds.length}曲)`;
-        
         li.addEventListener('click', () => {
             document.getElementById('current-playlist-name').textContent = pl.name;
             appState.currentQueue = appState.tracks.filter(t => pl.trackIds.includes(t.id));
@@ -416,8 +399,61 @@ function getTagColorHex(str) {
     return "#" + "00000".substring(0, 6 - c.length) + c;
 }
 
+// ★追加：すべての曲から既存のタグリスト（重複なし）を取得する関数
+function getExistingTags() {
+    const tagsMap = new Map();
+    appState.tracks.forEach(track => {
+        if (track.tags) {
+            track.tags.forEach(t => {
+                const tagObj = typeof t === 'string' ? {text: t, color: getTagColorHex(t)} : t;
+                tagsMap.set(tagObj.text, tagObj.color); 
+            });
+        }
+    });
+    return Array.from(tagsMap, ([text, color]) => ({text, color}));
+}
+
+// ★追加：既存タグを画面に表示する関数
+function renderExistingTags() {
+    const list = document.getElementById('existing-tags-list');
+    if (!list) return;
+    list.innerHTML = '';
+    
+    const existingTags = getExistingTags();
+    // すでに編集中に追加されているタグは候補から除外
+    const availableTags = existingTags.filter(et => !appState.editingTags.some(editT => editT.text === et.text));
+
+    availableTags.forEach(tagObj => {
+        const span = document.createElement('span');
+        span.className = 'tag-item';
+        span.style.borderLeft = `4px solid ${tagObj.color}`;
+        span.style.cursor = 'pointer';
+        span.style.opacity = '0.7'; 
+        span.innerHTML = `<span class="tag-text">${tagObj.text}</span> <span class="material-symbols-outlined" style="font-size: 14px; margin-left: 4px;">add</span>`;
+        
+        span.addEventListener('click', () => {
+            appState.editingTags.push({text: tagObj.text, color: tagObj.color});
+            renderEditTags(); 
+        });
+        
+        list.appendChild(span);
+    });
+}
+
 function initEditPage() {
     const tagInput = document.getElementById('edit-tags-input');
+    
+    // ★追加：HTMLを書き換えずに、JSで既存タグを表示するエリアを動的に作成
+    const tagsInputContainer = document.querySelector('.tags-input-container');
+    let existingTagsContainer = document.getElementById('existing-tags-container');
+    if (!existingTagsContainer) {
+        existingTagsContainer = document.createElement('div');
+        existingTagsContainer.id = 'existing-tags-container';
+        existingTagsContainer.className = 'existing-tags-wrapper';
+        existingTagsContainer.innerHTML = '<div class="existing-tags-title">既存のタグから追加する</div><div id="existing-tags-list" class="tags-list"></div>';
+        tagsInputContainer.parentNode.insertBefore(existingTagsContainer, tagsInputContainer.nextSibling);
+    }
+
     tagInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -441,6 +477,7 @@ function initEditPage() {
 
         await saveTrackToDB(track);
         await loadLibrary();
+        renderExistingTags(); // 保存したタグを既存リストにも反映
         alert('情報を保存しました！');
     });
 }
@@ -452,21 +489,14 @@ function renderEditTags() {
     appState.editingTags.forEach((tagObj, index) => {
         const span = document.createElement('span');
         span.className = 'tag-item';
-        span.style.borderLeft = `4px solid ${tagObj.color}`;
+        span.style.borderLeft = `4px solid ${tagObj.color}`; 
         
+        // ★修正：タグのテキスト部分を <span> で囲み、クリック可能に
         span.innerHTML = `
-            <span class="tag-text" data-index="${index}" title="クリックで名前を変更">${tagObj.text}</span> 
+            <span class="tag-text" data-index="${index}" title="クリックで名前を編集">${tagObj.text}</span> 
             <input type="color" class="tag-color-picker" value="${tagObj.color}" data-index="${index}" title="色を変更">
-            <span class="material-symbols-outlined remove-tag" data-index="${index}" title="削除">close</span>
+            <span class="material-symbols-outlined remove-tag" data-index="${index}">close</span>
         `;
-        
-        // ★追加：タグの余白をクリックした時にカラーピッカーを開く
-        span.addEventListener('click', (e) => {
-            if (e.target.classList.contains('tag-item')) {
-                span.querySelector('.tag-color-picker').click();
-            }
-        });
-
         list.appendChild(span);
     });
 
@@ -479,23 +509,29 @@ function renderEditTags() {
         });
     });
 
-    // ★追加：文字部分をクリックした時に名前を変更する
-    document.querySelectorAll('.tag-text').forEach(textEl => {
-        textEl.addEventListener('click', (e) => {
-            const index = e.target.getAttribute('data-index');
-            const newName = prompt("タグ名を変更してください", appState.editingTags[index].text);
-            if (newName !== null && newName.trim() !== "") {
-                appState.editingTags[index].text = newName.trim();
-                renderEditTags();
-            }
-        });
-    });
-
+    // カラーピッカー
     document.querySelectorAll('.tag-color-picker').forEach(picker => {
         picker.addEventListener('input', (e) => {
             const index = e.target.getAttribute('data-index');
             appState.editingTags[index].color = e.target.value; 
-            e.target.parentElement.style.borderLeft = `4px solid ${e.target.value}`;
+            e.target.parentElement.style.borderLeft = `4px solid ${e.target.value}`; 
         });
     });
+
+    // ★追加：文字部分をクリックで名前を編集
+    document.querySelectorAll('.tag-text').forEach(textEl => {
+        textEl.addEventListener('click', (e) => {
+            const index = e.target.getAttribute('data-index');
+            const currentText = appState.editingTags[index].text;
+            const newText = prompt("タグの名前を変更:", currentText);
+            // キャンセルや空欄でなければ更新
+            if (newText !== null && newText.trim() !== "") {
+                appState.editingTags[index].text = newText.trim();
+                renderEditTags(); 
+            }
+        });
+    });
+
+    // タグが更新されたら、既存タグのリスト（候補）も再描画する
+    renderExistingTags();
 }
