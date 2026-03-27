@@ -201,3 +201,39 @@ body { background-color: var(--bg-main); color: var(--text-primary); display: fl
     border: 1px solid var(--border-color);
     color: var(--text-secondary);
 }
+/* =========================================================
+   ★ タグのデザイン微調整（サイズ縮小・長文省略）
+   ========================================================= */
+
+/* カラーピッカーを少し小さく */
+.tag-color-picker {
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
+}
+
+/* 編集画面のタグテキスト省略用 */
+.tag-text {
+    max-width: 120px; /* この幅を超えると「...」になります */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* 削除ボタンのサイズ調整 */
+.tag-item .remove-tag {
+    font-size: 16px;
+    vertical-align: middle;
+}
+
+/* メイン画面のタグの省略と形を調整（左のカラーラインを目立たせるため少し四角く） */
+.track-list-tag {
+    max-width: 100px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
+    border-radius: 4px; 
+}
