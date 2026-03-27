@@ -5,7 +5,7 @@
 
 // --- 1. グローバル変数・定数 ---
 const DB_NAME = 'MusicPlayerDB';
-const DB_VERSION = 1;
+const DB_VERSION = 3;
 let db = null;
 
 // アプリの現在の状態を保持
