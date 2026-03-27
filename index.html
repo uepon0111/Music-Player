@@ -7,6 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
@@ -15,20 +16,34 @@
             <span class="material-symbols-outlined" style="font-size: 28px;">music_cast</span>
             <h1>MusicPlayer</h1>
         </div>
-        <nav class="nav-links">
-            <button class="nav-btn active" data-target="player">
-                <span class="material-symbols-outlined">play_circle</span>
-                <span>プレイヤー</span>
-            </button>
-            <button class="nav-btn" data-target="edit">
-                <span class="material-symbols-outlined">edit_note</span>
-                <span>情報編集</span>
-            </button>
-            <button class="nav-btn" data-target="log">
-                <span class="material-symbols-outlined">bar_chart</span>
-                <span>ログ・統計</span>
-            </button>
-        </nav>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <nav class="nav-links">
+                <button class="nav-btn active" data-target="player">
+                    <span class="material-symbols-outlined">play_circle</span>
+                    <span>プレイヤー</span>
+                </button>
+                <button class="nav-btn" data-target="edit">
+                    <span class="material-symbols-outlined">edit_note</span>
+                    <span>情報編集</span>
+                </button>
+                <button class="nav-btn" data-target="log">
+                    <span class="material-symbols-outlined">bar_chart</span>
+                    <span>ログ・統計</span>
+                </button>
+            </nav>
+            
+            <div class="auth-container" style="border-left: 1px solid var(--border-color); padding-left: 16px;">
+                <button id="btn-login" class="secondary-btn" style="display: flex; align-items: center; gap: 4px;">
+                    <span class="material-symbols-outlined" style="font-size: 18px;">login</span>
+                    <span>ログイン</span>
+                </button>
+                <div id="user-info" style="display: none; align-items: center; gap: 8px;">
+                    <span class="material-symbols-outlined" style="font-size: 24px; color: var(--accent-color);">account_circle</span>
+                    <span id="user-name" style="font-size: 14px; font-weight: bold;"></span>
+                    <button id="btn-logout" class="icon-btn" title="ログアウト"><span class="material-symbols-outlined">logout</span></button>
+                </div>
+            </div>
+        </div>
     </header>
 
     <main class="main-content">
@@ -68,7 +83,17 @@
                     <div class="content-area-inner">
                         <div class="current-playlist-header">
                             <h2 id="current-playlist-name" style="font-size: 24px;">マイライブラリ (すべて)</h2>
-                            <div class="playlist-controls">
+                            
+                            <div class="playlist-action-buttons" style="display: flex; gap: 8px; margin-top: 12px;">
+                                <button id="btn-play-all" class="primary-btn" style="padding: 6px 16px; border-radius: 20px;">
+                                    <span class="material-symbols-outlined">play_arrow</span> すべて再生
+                                </button>
+                                <button id="btn-shuffle-all" class="secondary-btn" style="padding: 6px 16px; border-radius: 20px;">
+                                    <span class="material-symbols-outlined">shuffle</span> シャッフル再生
+                                </button>
+                            </div>
+
+                            <div class="playlist-controls" style="margin-top: 16px;">
                                 <div style="display: flex; align-items: center; gap: 6px; margin-right: 12px;">
                                     <input type="checkbox" id="main-select-all" class="custom-checkbox">
                                     <label for="main-select-all" style="font-size: 14px; cursor: pointer; color: var(--text-secondary);">すべて選択</label>
@@ -107,7 +132,7 @@
             <div class="edit-container">
                 <div class="edit-header" style="display: flex; justify-content: space-between; align-items: center;">
                     <h2>楽曲情報の編集</h2>
-                    </div>
+                </div>
                 
                 <div class="edit-layout">
                     <div class="edit-sidebar">
