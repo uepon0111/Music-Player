@@ -69,12 +69,22 @@
                         <div class="current-playlist-header">
                             <h2 id="current-playlist-name" style="font-size: 24px;">マイライブラリ (すべて)</h2>
                             <div class="playlist-controls">
+                                <div style="display: flex; align-items: center; gap: 6px; margin-right: 12px;">
+                                    <input type="checkbox" id="main-select-all" class="custom-checkbox">
+                                    <label for="main-select-all" style="font-size: 14px; cursor: pointer; color: var(--text-secondary);">すべて選択</label>
+                                </div>
+
                                 <select id="main-sort-select" class="control-select">
+                                    <option value="manual">手動 (デフォルト)</option>
                                     <option value="date_desc">追加日が新しい順</option>
                                     <option value="date_asc">追加日が古い順</option>
-                                    <option value="name_asc">タイトル順 (A-Z)</option>
-                                    <option value="name_desc">タイトル順 (Z-A)</option>
-                                    <option value="artist_asc">アーティスト順</option>
+                                    <option value="name_asc">タイトル順 (昇順)</option>
+                                    <option value="name_desc">タイトル順 (降順)</option>
+                                    <option value="artist_asc">アーティスト順 (昇順)</option>
+                                    <option value="artist_desc">アーティスト順 (降順)</option>
+                                    <option value="release_desc">投稿日/リリース日 (新しい順)</option>
+                                    <option value="release_asc">投稿日/リリース日 (古い順)</option>
+                                    <option value="random">ランダム順</option>
                                 </select>
                             </div>
                         </div>
@@ -82,6 +92,7 @@
                         <div id="bulk-actions-bar" class="bulk-actions-bar">
                             <span id="bulk-count">0曲を選択中</span>
                             <button id="bulk-add-playlist-btn" class="secondary-btn" style="padding: 4px 8px; font-size: 12px;">プレイリストに追加</button>
+                            <button id="bulk-edit-btn" class="secondary-btn" style="padding: 4px 8px; font-size: 12px;">情報を編集</button>
                             <button id="bulk-remove-playlist-btn" class="secondary-btn" style="padding: 4px 8px; font-size: 12px; display: none;">リストから外す</button>
                             <button id="bulk-delete-btn" class="secondary-btn" style="padding: 4px 8px; font-size: 12px; color: red; border-color: red;">完全削除</button>
                         </div>
