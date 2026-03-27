@@ -24,17 +24,23 @@ const appState = {
     
     searchQueryEdit: "",
     selectedEditTracks: new Set(),
-    editingTags: []
+    editingTags: [],
+
+    // フェーズ3用: アカウント状態
+    isLoggedIn: false,
+    user: null
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
     initNavigation();
+    initAuthUI(); // フェーズ3準備
     initDragAndDrop();
     initPlayerControls(); 
     initPlaylists();
     initSearchAndSort();
     initBulkActions();
     initEditPage();      
+    initPlaylistPlaybackControls(); // ★追加: すべて再生/シャッフル機能
     
     try {
         await initDB();
@@ -63,8 +69,52 @@ function initNavigation() {
             updateBulkActionBar();
             
             if(targetId === 'edit') renderEditLibraryList();
-            if(targetId === 'log') renderLogStats(); // ★追加: ログ画面を開いた時に統計を計算・描画
         });
+    });
+}
+
+// ★フェーズ3準備: ログインUIの初期化
+function initAuthUI() {
+    const btnLogin = document.getElementById('btn-login');
+    const btnLogout = document.getElementById('btn-logout');
+
+    btnLogin.addEventListener('click', () => {
+        // ※次回ここにGoogle Identity Servicesの呼び出しを実装します
+        alert("次回フェーズでGoogle認証のポップアップが表示されるように実装します。");
+    });
+
+    btnLogout.addEventListener('click', () => {
+        // ※次回ここにログアウト処理を実装します
+        alert("ログアウト処理を実装予定です。");
+    });
+}
+
+// ★追加: リスト全体の再生/ランダム再生
+function initPlaylistPlaybackControls() {
+    const btnPlayAll = document.getElementById('btn-play-all');
+    const btnShuffleAll = document.getElementById('btn-shuffle-all');
+
+    btnPlayAll.addEventListener('click', () => {
+        if (appState.currentQueue.length === 0) return;
+        
+        // ソートを通常に戻して最初から再生
+        const sortSelect = document.getElementById('main-sort-select');
+        if (appState.sortModeMain === 'random') {
+            sortSelect.value = 'manual';
+            sortSelect.dispatchEvent(new Event('change'));
+        }
+        playTrack(0);
+    });
+
+    btnShuffleAll.addEventListener('click', () => {
+        if (appState.currentQueue.length === 0) return;
+        
+        // ランダムソートに変更して最初から再生
+        const sortSelect = document.getElementById('main-sort-select');
+        sortSelect.value = 'random';
+        sortSelect.dispatchEvent(new Event('change'));
+        
+        playTrack(0);
     });
 }
 
@@ -131,6 +181,7 @@ function updateMainQueue() {
         }
     }
 
+    // 検索フィルタ
     if (appState.searchQueryMain) {
         baseList = baseList.filter(t => {
             const titleMatch = t.title.toLowerCase().includes(appState.searchQueryMain);
@@ -143,6 +194,7 @@ function updateMainQueue() {
         });
     }
 
+    // ソート
     if (appState.sortModeMain === 'random') {
         baseList.sort(() => Math.random() - 0.5); 
     } else if (appState.sortModeMain !== 'manual') {
@@ -185,17 +237,6 @@ function initPlayerControls() {
     });
     audioPlayer.volume = volumeBar.value / 100;
 
-    // ★追加: 楽曲のメタデータ（長さなど）が読み込まれた時に、DBに曲の長さ(duration)を保存する
-    audioPlayer.addEventListener('loadedmetadata', () => {
-        if (appState.currentTrackIndex === -1) return;
-        const track = appState.currentQueue[appState.currentTrackIndex];
-        if (track && !track.duration && audioPlayer.duration !== Infinity) {
-            track.duration = audioPlayer.duration;
-            const tx = db.transaction(['tracks'], 'readwrite');
-            tx.objectStore('tracks').put(track);
-        }
-    });
-
     audioPlayer.addEventListener('timeupdate', () => {
         if (!audioPlayer.duration) return;
         const progressPercent = (audioPlayer.currentTime / audioPlayer.duration) * 100;
@@ -208,7 +249,7 @@ function initPlayerControls() {
 }
 
 function formatTime(seconds) {
-    if (isNaN(seconds) || !isFinite(seconds)) return "0:00";
+    if (isNaN(seconds)) return "0:00";
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
@@ -220,112 +261,20 @@ function playTrack(index) {
     appState.currentTrackIndex = index;
 
     if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
-    currentObjectUrl = URL.createObjectURL(track.fileBlob);
     
-    audioPlayer.src = currentObjectUrl;
+    // 現在はローカルのFileBlobを使用（フェーズ3でDrive APIのストリームに分岐します）
+    if (track.fileBlob) {
+        currentObjectUrl = URL.createObjectURL(track.fileBlob);
+        audioPlayer.src = currentObjectUrl;
+    }
+
     audioPlayer.play()
         .then(() => {
             appState.isPlaying = true;
             updatePlayerUI(track);
             renderMainTrackList(); 
-            recordPlayLog(track); // ★追加: 再生開始時にログを記録
         })
         .catch(e => console.error("再生エラー:", e));
-}
-
-// ★追加: 再生ログをDBに記録する関数
-function recordPlayLog(track) {
-    const transaction = db.transaction(['logs'], 'readwrite');
-    transaction.objectStore('logs').add({
-        trackId: track.id,
-        timestamp: Date.now()
-    });
-}
-
-// ★追加: ログ・統計画面の描画処理
-function renderLogStats() {
-    const transaction = db.transaction(['logs'], 'readonly');
-    const request = transaction.objectStore('logs').getAll();
-    
-    request.onsuccess = () => {
-        const logs = request.result;
-        
-        document.getElementById('stat-total-tracks').textContent = `${appState.tracks.length} 曲`;
-        document.getElementById('stat-total-plays').textContent = `${logs.length} 回`;
-        
-        let totalSeconds = 0;
-        const playCounts = {};
-        
-        logs.forEach(log => {
-            const track = appState.tracks.find(t => t.id === log.trackId);
-            if (track) {
-                playCounts[log.trackId] = (playCounts[log.trackId] || 0) + 1;
-                if (track.duration) {
-                    totalSeconds += track.duration;
-                }
-            }
-        });
-        
-        const hours = Math.floor(totalSeconds / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        document.getElementById('stat-total-time').textContent = `${hours}時間 ${minutes}分`;
-        
-        let topTrackId = null;
-        let maxPlays = 0;
-        for (const [tId, count] of Object.entries(playCounts)) {
-            if (count > maxPlays) {
-                maxPlays = count;
-                topTrackId = tId;
-            }
-        }
-        
-        if (topTrackId) {
-            const topTrack = appState.tracks.find(t => t.id === topTrackId);
-            document.getElementById('stat-top-track').textContent = topTrack ? `${topTrack.title} (${maxPlays}回)` : '-';
-        } else {
-            document.getElementById('stat-top-track').textContent = '-';
-        }
-
-        renderRankingChart(playCounts);
-    };
-}
-
-// ★追加: トップ5の簡易グラフ（ランキング）描画
-function renderRankingChart(playCounts) {
-    const wrapper = document.querySelector('.chart-wrapper');
-    wrapper.innerHTML = '<h3 style="margin-bottom: 16px; font-size: 16px;">再生回数ランキング トップ5</h3>';
-    
-    const sorted = Object.entries(playCounts)
-        .map(([id, count]) => ({ id, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 5);
-
-    if (sorted.length === 0) {
-        wrapper.innerHTML += '<p style="color: var(--text-secondary); font-size: 14px;">まだ再生データがありません。曲を再生してみてください！</p>';
-        return;
-    }
-
-    const maxCount = sorted[0].count;
-
-    sorted.forEach((item, index) => {
-        const track = appState.tracks.find(t => t.id === item.id);
-        const title = track ? track.title : '不明な曲';
-        const percentage = (item.count / maxCount) * 100;
-
-        const barContainer = document.createElement('div');
-        barContainer.style.marginBottom = '12px';
-
-        barContainer.innerHTML = `
-            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; padding: 0 4px;">
-                <span>${index + 1}. ${title}</span>
-                <span>${item.count}回</span>
-            </div>
-            <div style="width: 100%; height: 10px; background-color: var(--bg-surface); border-radius: 4px; overflow: hidden; border: 1px solid var(--border-color);">
-                <div style="width: ${percentage}%; height: 100%; background-color: var(--accent-color); border-radius: 4px; transition: width 0.5s ease-out;"></div>
-            </div>
-        `;
-        wrapper.appendChild(barContainer);
-    });
 }
 
 function togglePlay() {
@@ -427,7 +376,6 @@ async function handleFiles(files) {
             title: meta.title || file.name.replace(/\.[^/.]+$/, ""),
             artist: meta.artist || "不明なアーティスト",
             date: "", tags: [], thumbnailDataUrl: meta.picture || null, 
-            duration: null, // 初期値はnull（再生時に取得）
             addedAt: Date.now(), sortOrder: Date.now()
         };
         await saveTrackToDB(newTrack);
