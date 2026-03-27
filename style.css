@@ -203,39 +203,41 @@ body { background-color: var(--bg-main); color: var(--text-primary); display: fl
     color: var(--text-secondary);
 }
 /* =========================================================
-   ★ 第6弾追加・修正分：タグデザインの微調整（省略・サイズ）
+   ★ 第6弾追加分：タグデザインの微調整・省略対応
    ========================================================= */
 
-/* 編集画面のタグの角丸を調整（左端のラインを綺麗に見せるため） */
+/* 情報編集画面のタグ */
 .tag-item {
-    max-width: 100%;
-    border-radius: 4px 16px 16px 4px; 
+    max-width: 160px; /* 長すぎる場合は制限 */
+    cursor: pointer; /* 全体を押しやすく */
+    padding: 4px 8px; /* 余白を微調整 */
 }
 
-/* ★追加：タグの文字部分（長すぎる場合は...で省略） */
+/* タグのテキスト部分 */
 .tag-text {
-    max-width: 120px; /* ここで長さを制限 */
-    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    display: inline-block;
-    vertical-align: middle;
+    white-space: nowrap;
+    flex: 1;
+}
+.tag-text:hover {
+    text-decoration: underline;
+    color: var(--accent-color);
 }
 
-/* カラーピッカーのサイズを小さく */
+/* カラーピッカーを小さく */
 .tag-color-picker {
-    width: 14px !important;
-    height: 14px !important;
-    flex-shrink: 0; /* 潰れないように固定 */
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
 }
 
-/* プレイヤー画面（曲リスト）のタグの調整 */
+/* メイン画面（プレイヤー）のタグ */
 .track-list-tag {
-    display: inline-block;
-    border-radius: 4px 10px 10px 4px; /* 左端のラインを綺麗に見せる */
-    max-width: 120px;
-    white-space: nowrap;
+    max-width: 100px; /* 長すぎる場合は制限 */
     overflow: hidden;
     text-overflow: ellipsis;
-    vertical-align: middle;
+    white-space: nowrap;
+    color: #333;
+    font-weight: bold;
 }
