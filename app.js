@@ -1,20 +1,19 @@
 /**
  * app.js - Web Music Player
- * 第5弾: プレイヤー機能、プレイリスト、タグデザイン改良
+ * 第6弾: タグデザインの微調整（文字省略、カラーピッカー縮小、色反映）
  */
 
 const DB_NAME = 'MusicPlayerDB';
 const DB_VERSION = 3; 
 let db = null;
 
-// 音声再生用のAudioオブジェクト
 const audioPlayer = new Audio();
 let currentObjectUrl = null;
 
 const appState = {
     tracks: [],
     playlists: [],
-    currentQueue: [], // 現在再生中のリスト
+    currentQueue: [],
     currentTrackIndex: -1,
     isPlaying: false,
     editingTrackId: null,
@@ -25,13 +24,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     initNavigation();
     initDragAndDrop();
     initEditPage();
-    initPlayerControls(); // ★追加：プレイヤーの初期化
-    initPlaylists();      // ★追加：プレイリストの初期化
+    initPlayerControls();
+    initPlaylists();
     
     try {
         await initDB();
         await loadLibrary();
-        await loadPlaylists(); // ★追加：プレイリストの読み込み
+        await loadPlaylists();
     } catch (error) {
         console.error('DB初期化エラー:', error);
     }
@@ -68,7 +67,6 @@ function initDB() {
     });
 }
 
-// === ★追加：プレイヤーの制御 ===
 function initPlayerControls() {
     const playBtn = document.getElementById('ctrl-play');
     const prevBtn = document.getElementById('ctrl-prev');
@@ -80,20 +78,17 @@ function initPlayerControls() {
     nextBtn.addEventListener('click', playNext);
     prevBtn.addEventListener('click', playPrev);
 
-    // シークバーの操作
     seekBar.addEventListener('input', (e) => {
         if (audioPlayer.duration) {
             audioPlayer.currentTime = (e.target.value / 100) * audioPlayer.duration;
         }
     });
 
-    // 音量の操作
     volumeBar.addEventListener('input', (e) => {
         audioPlayer.volume = e.target.value / 100;
     });
     audioPlayer.volume = volumeBar.value / 100;
 
-    // 時間の更新
     audioPlayer.addEventListener('timeupdate', () => {
         if (!audioPlayer.duration) return;
         const progressPercent = (audioPlayer.currentTime / audioPlayer.duration) * 100;
@@ -102,7 +97,6 @@ function initPlayerControls() {
         document.getElementById('time-total').textContent = formatTime(audioPlayer.duration);
     });
 
-    // 曲が終わった時
     audioPlayer.addEventListener('ended', playNext);
 }
 
@@ -119,7 +113,6 @@ function playTrack(index) {
     const track = appState.currentQueue[index];
     appState.currentTrackIndex = index;
 
-    // メモリ解放と新しいURLの生成
     if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
     currentObjectUrl = URL.createObjectURL(track.fileBlob);
     
@@ -128,7 +121,7 @@ function playTrack(index) {
         .then(() => {
             appState.isPlaying = true;
             updatePlayerUI(track);
-            renderMainTrackList(); // リストの見た目（再生中マーク）を更新
+            renderMainTrackList(); 
         })
         .catch(e => console.error("再生エラー:", e));
 }
@@ -144,7 +137,7 @@ function togglePlay() {
             audioPlayer.play();
             appState.isPlaying = true;
         } else {
-            playTrack(0); // 何もセットされていなければ最初から
+            playTrack(0);
         }
     }
     updatePlayButtonUI();
@@ -153,7 +146,7 @@ function togglePlay() {
 function playNext() {
     if (appState.currentQueue.length === 0) return;
     let nextIndex = appState.currentTrackIndex + 1;
-    if (nextIndex >= appState.currentQueue.length) nextIndex = 0; // ループ
+    if (nextIndex >= appState.currentQueue.length) nextIndex = 0;
     playTrack(nextIndex);
 }
 
@@ -185,8 +178,6 @@ function updatePlayButtonUI() {
         ? '<span class="material-symbols-outlined">pause</span>' 
         : '<span class="material-symbols-outlined">play_arrow</span>';
 }
-
-// === マイライブラリ・リスト描画 ===
 
 function initDragAndDrop() {
     const dropZone = document.getElementById('drop-zone');
@@ -263,18 +254,16 @@ function getAllTracksFromDB() {
 
 async function loadLibrary() {
     appState.tracks = await getAllTracksFromDB();
-    // 全曲をデフォルトの再生キューにセット
     appState.currentQueue = [...appState.tracks].sort((a, b) => b.addedAt - a.addedAt);
     
     renderSidebarLibrary();
-    renderMainTrackList(); // 中央の画面に曲を表示
+    renderMainTrackList(); 
     renderEditLibraryList(appState.tracks);
 }
 
 function renderSidebarLibrary() {
     const list = document.getElementById('my-library-list');
     list.innerHTML = '';
-    // 「すべて」をクリックした時の動作
     const allItem = document.createElement('li');
     allItem.style.padding = '10px'; allItem.style.cursor = 'pointer'; allItem.style.fontWeight = 'bold';
     allItem.innerHTML = `<span class="material-symbols-outlined">library_music</span> すべての曲 (${appState.tracks.length})`;
@@ -286,7 +275,6 @@ function renderSidebarLibrary() {
     list.appendChild(allItem);
 }
 
-// ★追加：メイン画面の曲リスト描画
 function renderMainTrackList() {
     const container = document.getElementById('current-playlist-items');
     container.innerHTML = '';
@@ -295,12 +283,10 @@ function renderMainTrackList() {
         const li = document.createElement('li');
         li.className = 'track-list-item';
         
-        // 再生中の曲は色を変える
         if (appState.isPlaying && appState.currentTrackIndex === index) {
             li.classList.add('playing');
         }
 
-        // サムネイル
         const thumb = document.createElement('div');
         thumb.style.width = '40px'; thumb.style.height = '40px'; thumb.style.borderRadius = '4px';
         thumb.style.backgroundColor = 'var(--bg-surface)'; thumb.style.backgroundSize = 'cover';
@@ -311,16 +297,16 @@ function renderMainTrackList() {
             thumb.innerHTML = '<span class="material-symbols-outlined" style="font-size:20px; color:var(--text-secondary);">music_note</span>';
         }
 
-        // 情報
         const info = document.createElement('div');
         info.className = 'track-list-info';
         
         let tagsHtml = '';
         if (track.tags && track.tags.length > 0) {
+            // ★修正: title属性で全文表示、border-leftで4pxの太さで色をハッキリ表示
             tagsHtml = `<div class="track-list-tags">` + 
                 track.tags.map(t => {
                     const tObj = typeof t === 'string' ? {text: t, color: '#ccc'} : t;
-                    return `<span class="track-list-tag" style="border-left: 3px solid ${tObj.color}">${tObj.text}</span>`;
+                    return `<span class="track-list-tag" style="border-left: 4px solid ${tObj.color};" title="${tObj.text}">${tObj.text}</span>`;
                 }).join('') + `</div>`;
         }
 
@@ -333,7 +319,6 @@ function renderMainTrackList() {
         li.appendChild(thumb);
         li.appendChild(info);
 
-        // クリックで再生
         li.addEventListener('click', () => {
             playTrack(index);
         });
@@ -342,7 +327,6 @@ function renderMainTrackList() {
     });
 }
 
-// === プレイリスト機能 ===
 function initPlaylists() {
     document.getElementById('create-playlist-btn').addEventListener('click', async () => {
         const name = prompt("新しいプレイリストの名前を入力してください");
@@ -351,7 +335,7 @@ function initPlaylists() {
         const newList = {
             id: 'pl_' + Date.now(),
             name: name,
-            trackIds: [] // ここに曲のIDを保存します
+            trackIds: [] 
         };
         
         const transaction = db.transaction(['playlists'], 'readwrite');
@@ -380,10 +364,8 @@ async function loadPlaylists() {
         li.style.padding = '10px'; li.style.cursor = 'pointer'; li.style.borderBottom = '1px solid var(--border-color)';
         li.innerHTML = `<span class="material-symbols-outlined">queue_music</span> ${pl.name} (${pl.trackIds.length}曲)`;
         
-        // プレイリストをクリックした時の動作
         li.addEventListener('click', () => {
             document.getElementById('current-playlist-name').textContent = pl.name;
-            // プレイリスト内の曲だけを抽出
             appState.currentQueue = appState.tracks.filter(t => pl.trackIds.includes(t.id));
             renderMainTrackList();
         });
@@ -391,7 +373,6 @@ async function loadPlaylists() {
     });
 }
 
-// === 情報編集 ===
 function renderEditLibraryList(tracks) {
     const list = document.getElementById('edit-library-list');
     list.innerHTML = '';
@@ -463,7 +444,6 @@ function initEditPage() {
     });
 }
 
-// ★修正：タグの左側に色付きラインを表示
 function renderEditTags() {
     const list = document.getElementById('edit-tags-list');
     list.innerHTML = '';
@@ -471,10 +451,11 @@ function renderEditTags() {
     appState.editingTags.forEach((tagObj, index) => {
         const span = document.createElement('span');
         span.className = 'tag-item';
-        span.style.borderLeft = `4px solid ${tagObj.color}`; // 左側にカラーライン
+        span.style.borderLeft = `4px solid ${tagObj.color}`;
         
+        // ★修正: tag-text クラスで文字を囲み、長さを制限
         span.innerHTML = `
-            ${tagObj.text} 
+            <span class="tag-text" title="${tagObj.text}">${tagObj.text}</span>
             <input type="color" class="tag-color-picker" value="${tagObj.color}" data-index="${index}" title="色を変更">
             <span class="material-symbols-outlined remove-tag" data-index="${index}">close</span>
         `;
@@ -493,7 +474,7 @@ function renderEditTags() {
         picker.addEventListener('input', (e) => {
             const index = e.target.getAttribute('data-index');
             appState.editingTags[index].color = e.target.value; 
-            e.target.parentElement.style.borderLeft = `4px solid ${e.target.value}`; // 見た目も即反映
+            e.target.parentElement.style.borderLeft = `4px solid ${e.target.value}`; 
         });
     });
 }
