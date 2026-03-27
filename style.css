@@ -50,10 +50,10 @@ body { background-color: var(--bg-main); color: var(--text-primary); display: fl
 .search-bar input { border: none; outline: none; width: 100%; margin-left: 8px; background: transparent; }
 .item-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
 .content-area { flex: 1; padding: 24px; display: flex; flex-direction: column; overflow-y: auto; }
-.current-playlist-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 16px; border-bottom: 1px solid var(--border-color); margin-bottom: 16px; }
+.current-playlist-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 16px; border-bottom: 1px solid var(--border-color); margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
 .playlist-controls { display: flex; align-items: center; gap: 12px; }
 
-/* ★編集ページ */
+/* 編集ページ */
 .edit-container { max-width: 1000px; margin: 0 auto; padding: 40px 20px; }
 .edit-header { margin-bottom: 30px; border-bottom: 1px solid var(--border-color); padding-bottom: 16px; }
 .edit-layout { display: flex; gap: 30px; height: 600px; }
@@ -69,21 +69,24 @@ body { background-color: var(--bg-main); color: var(--text-primary); display: fl
 .form-group input[type="text"], .form-group input[type="date"] { padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; outline: none; }
 .form-group input:focus { border-color: var(--accent-color); }
 
-/* ★タグのスタイル */
+/* ★タグのスタイル（背景色を固定し、枠線をつけました） */
 .tags-input-container { border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; background: var(--bg-main); }
 .tags-input-container input { border: none; outline: none; width: 100%; padding: 4px; margin-bottom: 8px; }
 .tags-list { display: flex; flex-wrap: wrap; gap: 8px; }
-.tag-item { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 16px; font-size: 12px; font-weight: bold; color: #333; }
-.tag-item .remove-tag { cursor: pointer; font-size: 14px; margin-left: 4px; }
+.tag-item { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 16px; font-size: 12px; font-weight: bold; color: #333; background-color: var(--bg-surface); border: 1px solid var(--border-color); }
+.tag-item .remove-tag { cursor: pointer; font-size: 14px; margin-left: 4px; color: var(--text-secondary); }
 .tag-item .remove-tag:hover { color: red; }
+.tag-color-picker { width: 20px; height: 20px; padding: 0; border: none; border-radius: 50%; cursor: pointer; background: transparent; margin-left: 4px; }
+.tag-color-picker::-webkit-color-swatch-wrapper { padding: 0; }
+.tag-color-picker::-webkit-color-swatch { border: none; border-radius: 50%; box-shadow: 0 0 2px rgba(0,0,0,0.3); }
 
-/* ★ログページ */
+/* ログページ */
 .log-container { max-width: 1000px; margin: 0 auto; padding: 40px 20px; }
 .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 40px; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; margin-bottom: 40px; }
 .stat-card { background-color: var(--bg-surface); border: 1px solid var(--border-color); padding: 20px; border-radius: 8px; text-align: center; }
 .stat-card h3 { font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; }
-.stat-card p { font-size: 20px; font-weight: bold; color: var(--accent-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-card p { font-size: 18px; font-weight: bold; color: var(--accent-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chart-wrapper { background-color: var(--bg-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; height: 400px; }
 
 /* プレイヤー */
@@ -91,7 +94,7 @@ body { background-color: var(--bg-main); color: var(--text-primary); display: fl
 .track-info { display: flex; align-items: center; gap: 16px; width: 30%; min-width: 200px; }
 .player-thumbnail { width: 56px; height: 56px; background-color: var(--bg-surface); border-radius: 6px; display: flex; justify-content: center; align-items: center; color: var(--text-secondary); background-size: cover; background-position: center; }
 .track-info .details { display: flex; flex-direction: column; overflow: hidden; }
-.track-info .title { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.track-info .title { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
 .track-info .artist { font-size: 12px; color: var(--text-secondary); }
 .player-controls { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .player-controls .buttons { display: flex; align-items: center; gap: 16px; }
@@ -102,22 +105,37 @@ body { background-color: var(--bg-main); color: var(--text-primary); display: fl
 .volume-controls { width: 30%; min-width: 150px; display: flex; align-items: center; justify-content: flex-end; gap: 12px; color: var(--text-secondary); }
 .volume-controls input[type="range"] { width: 100px; accent-color: var(--text-secondary); }
 
-/* 追加：タグのカラーピッカースタイル */
-.tag-color-picker {
-    width: 20px;
-    height: 20px;
-    padding: 0;
-    border: none;
-    border-radius: 50%;
-    cursor: pointer;
-    background: transparent;
-    margin-left: 4px;
-}
-.tag-color-picker::-webkit-color-swatch-wrapper {
-    padding: 0;
-}
-.tag-color-picker::-webkit-color-swatch {
-    border: none;
-    border-radius: 50%;
-    box-shadow: 0 0 2px rgba(0,0,0,0.3);
+
+/* =========================================================
+   ★ スマホ・タブレット用レスポンシブデザイン (横幅768px以下)
+   ========================================================= */
+@media (max-width: 768px) {
+    /* ヘッダーの文字を隠しアイコンだけにする */
+    .header { padding: 0 10px; }
+    .logo h1 { font-size: 18px; }
+    .nav-links { gap: 4px; }
+    .nav-btn span:not(.material-symbols-outlined) { display: none; }
+    .nav-btn { padding: 8px; }
+
+    /* プレイヤーページ: 縦積みに変更 */
+    .layout-container { flex-direction: column; }
+    .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border-color); height: 250px; flex-shrink: 0; padding: 12px; }
+    .content-area { padding: 12px; }
+
+    /* 編集ページ: 縦積みに変更 */
+    .edit-container { padding: 20px 10px; }
+    .edit-layout { flex-direction: column; height: auto; gap: 20px; }
+    .edit-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border-color); padding-right: 0; padding-bottom: 20px; max-height: 200px; }
+    .edit-main-area { flex-direction: column; align-items: center; gap: 20px; }
+
+    /* ログページ */
+    .log-container { padding: 20px 10px; }
+
+    /* スマホ用プレイヤー (高さを広げて2段組みにする) */
+    :root { --player-height: 120px; }
+    .global-player { flex-wrap: wrap; padding: 8px 12px; justify-content: space-between; align-content: center; }
+    .track-info { width: calc(100% - 120px); min-width: auto; } /* 音量調整のスペースを空ける */
+    .volume-controls { width: 100px; min-width: auto; }
+    .player-controls { width: 100%; order: 3; margin-top: 8px; } /* コントロールを下の段に移動 */
+    .progress-container { max-width: 100%; }
 }
