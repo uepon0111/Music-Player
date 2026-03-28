@@ -4,7 +4,7 @@
 
 // ★ 取得したクライアントIDを以下に必ず貼り付けてください
 const GOOGLE_CLIENT_ID = '966636096862-8hrrm5heb4g5r469veoels7u6ifjguuk.apps.googleusercontent.com';
-const SYNC_FOLDER_NAME = 'WebMusicPlayer_Sync'; // Drive内に作成されるフォルダ名
+const SYNC_FOLDER_NAME = 'WebMusicPlayer_Sync'; 
 
 const DB_NAME = 'MusicPlayerDB';
 const DB_VERSION = 3; 
@@ -35,7 +35,8 @@ const appState = {
 
     isLoggedIn: false,
     user: null,
-    isSyncing: false // 同期処理中のフラグ
+    isSyncing: false,
+    isStreaming: false // ★ ストリーミング設定
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -48,6 +49,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initBulkActions();
     initEditPage();      
     initPlaylistPlaybackControls(); 
+    initSettings(); // ★ 設定画面初期化
     
     try {
         await initDB();
@@ -78,6 +80,27 @@ function initNavigation() {
             if(targetId === 'edit') renderEditLibraryList();
         });
     });
+}
+
+function initSettings() {
+    const isStreamingSaved = localStorage.getItem('isStreaming');
+    if (isStreamingSaved !== null) {
+        appState.isStreaming = isStreamingSaved === 'true';
+    }
+    
+    const checkbox = document.getElementById('setting-streaming');
+    if (checkbox) {
+        checkbox.checked = appState.isStreaming;
+        checkbox.addEventListener('change', (e) => {
+            appState.isStreaming = e.target.checked;
+            localStorage.setItem('isStreaming', appState.isStreaming);
+            
+            // ストリーミングからキャッシュモードに戻した場合、不足しているBlobをDLするために同期を走らせる
+            if (!appState.isStreaming && appState.isLoggedIn) {
+                autoSync();
+            }
+        });
+    }
 }
 
 // ----------------------------------------------------
@@ -137,7 +160,6 @@ function fetchUserInfo(token) {
         appState.user = data;
         updateAuthUIDisplay();
         console.log("ログイン成功。自動同期を開始します。");
-        // ログイン直後に自動同期を走らせる
         autoSync();
     })
     .catch(err => console.error('ユーザー情報取得エラー:', err));
@@ -158,14 +180,13 @@ function updateAuthUIDisplay() {
     }
 }
 
-// データの追加・削除・編集時に呼び出すラッパー関数
 function autoSync() {
     if (appState.isLoggedIn && !appState.isSyncing) {
         performDriveSync();
     }
 }
 
-// === Drive自動同期メイン処理 (ダウンロード / アップロード) ===
+// === 新しい Drive自動同期処理 (Last-Write-Wins マージ) ===
 async function performDriveSync() {
     if (!gapiAccessToken) return;
     
@@ -176,7 +197,7 @@ async function performDriveSync() {
     try {
         const folderId = await getOrCreateSyncFolder();
         
-        // 1. Drive上のJSONをダウンロードして変更を確認
+        // 1. リモートデータの取得
         const existingJsonId = await findDriveFile('library_sync.json', 'application/json', folderId);
         let remoteData = null;
         if (existingJsonId) {
@@ -188,72 +209,95 @@ async function performDriveSync() {
             }
         }
 
-        // 2. ローカルデータとリモートデータ(JSON)のマージ処理
-        const localTracks = await getAllTracksFromDB();
+        const remoteTracks = remoteData ? remoteData.tracks || [] : [];
+        const remotePlaylists = remoteData ? remoteData.playlists || [] : [];
+        
+        // ローカルデータの取得（削除フラグが付いたものも含めて全て取得）
+        const localTracks = await getAllTracksFromDBRaw(); 
+        const localPlaylists = await getAllPlaylistsFromDBRaw();
 
-        if (remoteData && remoteData.tracks) {
-            const remoteTrackIds = new Set(remoteData.tracks.map(t => t.id));
-            const localTrackIds = new Set(localTracks.map(t => t.id));
+        const localTrackMap = new Map(localTracks.map(t => [t.id, t]));
+        const localPlaylistMap = new Map(localPlaylists.map(p => [p.id, p]));
 
-            // a. リモートにあってローカルにない曲（別端末で追加された）をダウンロード
-            for (let rTrack of remoteData.tracks) {
-                if (!localTrackIds.has(rTrack.id) && rTrack.driveFileId) {
-                    if (syncStatus) syncStatus.textContent = `DL中: ${rTrack.title}`;
-                    try {
-                        const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${rTrack.driveFileId}?alt=media`, {
-                            headers: { Authorization: `Bearer ${gapiAccessToken}` }
-                        });
-                        if (fileRes.ok) {
-                            const blob = await fileRes.blob();
-                            rTrack.fileBlob = blob;
-                            await saveTrackToDB(rTrack);
+        // 2. Tracks のマージ
+        for (let rTrack of remoteTracks) {
+            let lTrack = localTrackMap.get(rTrack.id);
+            if (!lTrack) {
+                // ローカルに存在しない（他端末で新規追加された）
+                if (!rTrack.deleted && !appState.isStreaming && rTrack.driveFileId) {
+                    const blob = await downloadFileFromDrive(rTrack.driveFileId, syncStatus, rTrack.title);
+                    if (blob) rTrack.fileBlob = blob;
+                }
+                await saveTrackToDB(rTrack);
+                localTrackMap.set(rTrack.id, rTrack);
+            } else {
+                // 両方に存在する場合、updatedAt を比較
+                const rTime = rTrack.updatedAt || 0;
+                const lTime = lTrack.updatedAt || 0;
+                
+                if (rTime > lTime) {
+                    // リモートの方が新しいので上書き
+                    rTrack.fileBlob = lTrack.fileBlob; 
+                    if (rTrack.deleted) {
+                        delete rTrack.fileBlob; 
+                    } else if (!appState.isStreaming && !rTrack.fileBlob && rTrack.driveFileId) {
+                        const blob = await downloadFileFromDrive(rTrack.driveFileId, syncStatus, rTrack.title);
+                        if (blob) rTrack.fileBlob = blob;
+                    }
+                    await saveTrackToDB(rTrack);
+                    localTrackMap.set(rTrack.id, rTrack);
+                } else {
+                    // ローカルの方が新しい（または同じ）。キャッシュモード切り替え時のBlob補完だけチェック
+                    if (!lTrack.deleted && !appState.isStreaming && !lTrack.fileBlob && lTrack.driveFileId) {
+                        const blob = await downloadFileFromDrive(lTrack.driveFileId, syncStatus, lTrack.title);
+                        if (blob) {
+                            lTrack.fileBlob = blob;
+                            await saveTrackToDB(lTrack);
                         }
-                    } catch (e) {
-                        console.error("ファイルダウンロード失敗:", e);
                     }
                 }
             }
+        }
 
-            // b. リモートから消えていて、ローカルに存在する曲（別端末で削除された）をローカルからも削除
-            for (let lTrack of localTracks) {
-                if (lTrack.driveFileId && !remoteTrackIds.has(lTrack.id)) {
-                    await deleteTrackFromDB(lTrack.id);
+        // 新規ローカルファイルのDriveアップロード
+        for (let lTrack of localTrackMap.values()) {
+            if (!lTrack.deleted && !lTrack.driveFileId && lTrack.fileBlob) {
+                if (syncStatus) syncStatus.textContent = `UP中: ${lTrack.title}`;
+                const fileId = await uploadFileToDrive(lTrack.fileBlob, lTrack.fileName, lTrack.fileBlob.type, folderId);
+                lTrack.driveFileId = fileId;
+                lTrack.updatedAt = Date.now();
+                await saveTrackToDB(lTrack);
+            }
+        }
+
+        // 3. Playlists のマージ
+        for (let rPl of remotePlaylists) {
+            let lPl = localPlaylistMap.get(rPl.id);
+            if (!lPl) {
+                await savePlaylistToDB(rPl);
+                localPlaylistMap.set(rPl.id, rPl);
+            } else {
+                const rTime = rPl.updatedAt || 0;
+                const lTime = lPl.updatedAt || 0;
+                if (rTime > lTime) {
+                    await savePlaylistToDB(rPl);
+                    localPlaylistMap.set(rPl.id, rPl);
                 }
             }
-            
-            // プレイリストもリモートに存在すればマージ（上書き）
-            if (remoteData.playlists) {
-                const tx = db.transaction(['playlists'], 'readwrite');
-                const store = tx.objectStore('playlists');
-                await store.clear();
-                remoteData.playlists.forEach(pl => store.put(pl));
-            }
         }
 
-        // 最新のローカルデータを再取得
-        const updatedLocalTracks = await getAllTracksFromDB();
-        
-        // 3. ローカルにあり、Drive未アップロードのもの（新規追加曲）をアップロード
-        for (let track of updatedLocalTracks) {
-            if (track.fileBlob && !track.driveFileId) {
-                if (syncStatus) syncStatus.textContent = `UP中: ${track.title}`;
-                const driveFileId = await uploadFileToDrive(track.fileBlob, track.fileName, track.fileBlob.type, folderId);
-                track.driveFileId = driveFileId;
-                await saveTrackToDB(track); 
-            }
-        }
-
-        // 4. 最新の情報をJSON化してアップロード
+        // 4. 最新の状態をJSON化してアップロード
         if (syncStatus) syncStatus.textContent = "設定を保存中...";
-        const finalTracks = await getAllTracksFromDB();
-        const finalPlaylists = await getAllPlaylistsFromDB();
+        
+        const finalTracksToSync = Array.from(localTrackMap.values()).map(t => {
+            const { fileBlob, ...rest } = t; 
+            return rest;
+        });
+        const finalPlaylistsToSync = Array.from(localPlaylistMap.values());
 
         const syncData = {
-            tracks: finalTracks.map(t => {
-                const { fileBlob, ...rest } = t; // Blob自体は除外して保存
-                return rest;
-            }),
-            playlists: finalPlaylists,
+            tracks: finalTracksToSync,
+            playlists: finalPlaylistsToSync,
             lastSyncedAt: Date.now()
         };
 
@@ -310,30 +354,34 @@ async function findDriveFile(name, mimeType, parentId = null) {
 
 async function uploadFileToDrive(blob, filename, mimeType, folderId, existingId = null) {
     let fileId = existingId;
-    
     if (!fileId) {
         const metaRes = await fetch('https://www.googleapis.com/drive/v3/files', {
             method: 'POST',
-            headers: {
-                Authorization: `Bearer ${gapiAccessToken}`,
-                'Content-Type': 'application/json'
-            },
+            headers: { Authorization: `Bearer ${gapiAccessToken}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: filename, parents: [folderId], mimeType: mimeType })
         });
         const meta = await metaRes.json();
         fileId = meta.id;
     }
-
     await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
         method: 'PATCH',
-        headers: {
-            Authorization: `Bearer ${gapiAccessToken}`,
-            'Content-Type': mimeType
-        },
+        headers: { Authorization: `Bearer ${gapiAccessToken}`, 'Content-Type': mimeType },
         body: blob
     });
-
     return fileId;
+}
+
+async function downloadFileFromDrive(fileId, syncStatusElement, title) {
+    if (syncStatusElement) syncStatusElement.textContent = `DL中: ${title || ''}`;
+    try {
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+            headers: { Authorization: `Bearer ${gapiAccessToken}` }
+        });
+        if (res.ok) return await res.blob();
+    } catch (e) {
+        console.error("ファイルダウンロード失敗:", e);
+    }
+    return null;
 }
 
 // ----------------------------------------------------
@@ -346,7 +394,6 @@ function initPlaylistPlaybackControls() {
 
     btnPlayAll.addEventListener('click', () => {
         if (appState.currentQueue.length === 0) return;
-        
         const sortSelect = document.getElementById('main-sort-select');
         if (appState.sortModeMain === 'random') {
             sortSelect.value = 'manual';
@@ -357,11 +404,9 @@ function initPlaylistPlaybackControls() {
 
     btnShuffleAll.addEventListener('click', () => {
         if (appState.currentQueue.length === 0) return;
-        
         const sortSelect = document.getElementById('main-sort-select');
         sortSelect.value = 'random';
         sortSelect.dispatchEvent(new Event('change'));
-        
         playTrack(0);
     });
 }
@@ -508,9 +553,18 @@ function playTrack(index) {
 
     if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
     
+    // ★ ストリーミングかキャッシュかによる再生元の分岐
     if (track.fileBlob) {
         currentObjectUrl = URL.createObjectURL(track.fileBlob);
         audioPlayer.src = currentObjectUrl;
+    } else if (appState.isStreaming && track.driveFileId && gapiAccessToken) {
+        audioPlayer.src = `https://www.googleapis.com/drive/v3/files/${track.driveFileId}?alt=media&access_token=${gapiAccessToken}`;
+    } else if (appState.isStreaming && !appState.isLoggedIn) {
+        alert('ストリーミング再生を行うにはGoogleログインが必要です。');
+        return;
+    } else {
+        alert('音声ファイルが端末にキャッシュされていません。インターネットに接続して同期を待つか、設定を確認してください。');
+        return;
     }
 
     audioPlayer.play()
@@ -622,12 +676,14 @@ async function handleFiles(files) {
             artist: meta.artist || "不明なアーティスト",
             date: "", tags: [], thumbnailDataUrl: meta.picture || null, 
             addedAt: Date.now(), sortOrder: Date.now(),
+            updatedAt: Date.now(), // ★ 更新日時を付与
+            deleted: false,        // ★ 論理削除フラグ
             driveFileId: null 
         };
         await saveTrackToDB(newTrack);
     }
     await loadLibrary();
-    autoSync(); // ★ファイル追加時に自動同期
+    autoSync(); 
 }
 
 function saveTrackToDB(track) {
@@ -639,16 +695,17 @@ function saveTrackToDB(track) {
     });
 }
 
-function deleteTrackFromDB(id) {
+function savePlaylistToDB(pl) {
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction(['tracks'], 'readwrite');
-        const request = transaction.objectStore('tracks').delete(id);
-        request.onsuccess = () => resolve();
-        request.onerror = (e) => reject(e.target.error);
+        const tx = db.transaction(['playlists'], 'readwrite');
+        const req = tx.objectStore('playlists').put(pl);
+        req.onsuccess = () => resolve();
+        req.onerror = e => reject(e.target.error);
     });
 }
 
-function getAllTracksFromDB() {
+// 生データ（削除済みも含む）取得用
+function getAllTracksFromDBRaw() {
     return new Promise((resolve, reject) => {
         const transaction = db.transaction(['tracks'], 'readonly');
         const request = transaction.objectStore('tracks').getAll();
@@ -656,9 +713,19 @@ function getAllTracksFromDB() {
         request.onerror = (e) => reject(e.target.error);
     });
 }
+function getAllPlaylistsFromDBRaw() {
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(['playlists'], 'readonly');
+        const request = transaction.objectStore('playlists').getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = (e) => reject(e.target.error);
+    });
+}
 
 async function loadLibrary() {
-    appState.tracks = await getAllTracksFromDB();
+    // 表示用には論理削除されていないものだけを取得
+    const allTracks = await getAllTracksFromDBRaw();
+    appState.tracks = allTracks.filter(t => !t.deleted);
     
     appState.tracks.sort((a, b) => {
         const orderA = a.sortOrder !== undefined ? a.sortOrder : a.addedAt;
@@ -714,25 +781,25 @@ function renderSidebarLibrary() {
     list.appendChild(allItem);
 }
 
-function saveManualOrder() {
+async function saveManualOrder() {
     if (appState.currentPlaylistId) {
         const pl = appState.playlists.find(p => p.id === appState.currentPlaylistId);
         if (pl) {
             pl.trackIds = appState.currentQueue.map(t => t.id);
-            const tx = db.transaction(['playlists'], 'readwrite');
-            tx.objectStore('playlists').put(pl);
-            tx.oncomplete = () => autoSync(); // ★並び替え変更時に自動同期
+            pl.updatedAt = Date.now(); // ★ 更新日時
+            await savePlaylistToDB(pl);
+            autoSync(); 
         }
     } else {
         if (!appState.searchQueryMain) {
             appState.tracks = [...appState.currentQueue];
-            const tx = db.transaction(['tracks'], 'readwrite');
-            const store = tx.objectStore('tracks');
-            appState.tracks.forEach((t, i) => {
+            for (let i = 0; i < appState.tracks.length; i++) {
+                let t = appState.tracks[i];
                 t.sortOrder = i;
-                store.put(t);
-            });
-            tx.oncomplete = () => autoSync(); // ★並び替え変更時に自動同期
+                t.updatedAt = Date.now(); // ★ 更新日時
+                await saveTrackToDB(t);
+            }
+            autoSync();
         }
     }
 }
@@ -947,63 +1014,63 @@ function initBulkActions() {
 async function deleteTracksCompletely(trackIds) {
     if (!confirm(`${trackIds.length}曲をライブラリから完全に削除しますか？\n（この操作は元に戻せません）`)) return;
 
-    const transaction = db.transaction(['tracks', 'playlists'], 'readwrite');
-    const tracksStore = transaction.objectStore('tracks');
-    const playlistsStore = transaction.objectStore('playlists');
-
-    const playlistsRequest = playlistsStore.getAll();
-    playlistsRequest.onsuccess = () => {
-        const playlists = playlistsRequest.result;
-        playlists.forEach(pl => {
-            let changed = false;
-            trackIds.forEach(id => {
-                const index = pl.trackIds.indexOf(id);
-                if (index !== -1) {
-                    pl.trackIds.splice(index, 1);
-                    changed = true;
-                }
-            });
-            if (changed) playlistsStore.put(pl);
+    // プレイリストからの削除
+    const playlists = await getAllPlaylistsFromDBRaw();
+    for (let pl of playlists) {
+        let changed = false;
+        trackIds.forEach(id => {
+            const index = pl.trackIds.indexOf(id);
+            if (index !== -1) {
+                pl.trackIds.splice(index, 1);
+                changed = true;
+            }
         });
-    };
+        if (changed) {
+            pl.updatedAt = Date.now();
+            await savePlaylistToDB(pl);
+        }
+    }
 
-    trackIds.forEach(id => tracksStore.delete(id));
+    // トラックの論理削除（実ファイルBlobは容量削減のため消す）
+    const tracks = await getAllTracksFromDBRaw();
+    for (let id of trackIds) {
+        let track = tracks.find(t => t.id === id);
+        if (track) {
+            track.deleted = true;
+            track.updatedAt = Date.now();
+            delete track.fileBlob; 
+            await saveTrackToDB(track);
+        }
+    }
 
-    transaction.oncomplete = async () => {
-        appState.selectedMainTracks.clear();
-        appState.selectedEditTracks.clear();
-        await loadPlaylists();
-        await loadLibrary();
-        autoSync(); // ★完全削除時に自動同期
-    };
+    appState.selectedMainTracks.clear();
+    appState.selectedEditTracks.clear();
+    await loadPlaylists();
+    await loadLibrary();
+    autoSync();
 }
 
 function initPlaylists() {
     document.getElementById('create-playlist-btn').addEventListener('click', async () => {
         const name = prompt("新しいプレイリストの名前を入力してください");
         if (!name) return;
-        const newList = { id: 'pl_' + Date.now(), name: name, trackIds: [] };
-        const transaction = db.transaction(['playlists'], 'readwrite');
-        transaction.objectStore('playlists').put(newList);
-        
-        transaction.oncomplete = async () => {
-            await loadPlaylists();
-            autoSync(); // ★プレイリスト作成時に自動同期
+        const newList = { 
+            id: 'pl_' + Date.now(), 
+            name: name, 
+            trackIds: [], 
+            updatedAt: Date.now(), // ★
+            deleted: false         // ★
         };
-    });
-}
-
-function getAllPlaylistsFromDB() {
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction(['playlists'], 'readonly');
-        const request = transaction.objectStore('playlists').getAll();
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = (e) => reject(e.target.error);
+        await savePlaylistToDB(newList);
+        await loadPlaylists();
+        autoSync();
     });
 }
 
 async function loadPlaylists() {
-    appState.playlists = await getAllPlaylistsFromDB();
+    const allPl = await getAllPlaylistsFromDBRaw();
+    appState.playlists = allPl.filter(p => !p.deleted);
+    
     const container = document.getElementById('playlists-container');
     container.innerHTML = '';
     
@@ -1094,16 +1161,14 @@ async function addTracksToPlaylist(playlistId, trackIdsArray) {
         return;
     }
 
-    const transaction = db.transaction(['playlists'], 'readwrite');
-    transaction.objectStore('playlists').put(pl);
+    pl.updatedAt = Date.now(); // ★
+    await savePlaylistToDB(pl);
     
-    transaction.oncomplete = async () => {
-        appState.selectedMainTracks.clear();
-        await loadPlaylists(); 
-        if (appState.currentPlaylistId === playlistId) updateMainQueue();
-        alert(`「${pl.name}」に ${addedCount}曲 追加しました！`);
-        autoSync(); // ★プレイリスト追加時に自動同期
-    };
+    appState.selectedMainTracks.clear();
+    await loadPlaylists(); 
+    if (appState.currentPlaylistId === playlistId) updateMainQueue();
+    alert(`「${pl.name}」に ${addedCount}曲 追加しました！`);
+    autoSync();
 }
 
 async function removeTracksFromPlaylist(playlistId, trackIdsArray) {
@@ -1113,33 +1178,33 @@ async function removeTracksFromPlaylist(playlistId, trackIdsArray) {
     if (!pl) return;
 
     pl.trackIds = pl.trackIds.filter(id => !trackIdsArray.includes(id));
+    pl.updatedAt = Date.now(); // ★
     
-    const transaction = db.transaction(['playlists'], 'readwrite');
-    transaction.objectStore('playlists').put(pl);
+    await savePlaylistToDB(pl);
     
-    transaction.oncomplete = async () => {
-        appState.selectedMainTracks.clear();
-        await loadPlaylists();
-        updateMainQueue();
-        autoSync(); // ★プレイリストから削除時に自動同期
-    };
+    appState.selectedMainTracks.clear();
+    await loadPlaylists();
+    updateMainQueue();
+    autoSync();
 }
 
 async function deletePlaylist(playlistId, playlistName) {
     if (!confirm(`プレイリスト「${playlistName}」を削除しますか？\n（中の曲データは消えません）`)) return;
 
-    const transaction = db.transaction(['playlists'], 'readwrite');
-    transaction.objectStore('playlists').delete(playlistId);
+    const pl = appState.playlists.find(p => p.id === playlistId);
+    if (pl) {
+        pl.deleted = true; // ★論理削除
+        pl.updatedAt = Date.now();
+        await savePlaylistToDB(pl);
+    }
     
-    transaction.oncomplete = async () => {
-        await loadPlaylists();
-        if (appState.currentPlaylistId === playlistId) {
-            appState.currentPlaylistId = null;
-            document.getElementById('current-playlist-name').textContent = "マイライブラリ (すべて)";
-            updateMainQueue();
-        }
-        autoSync(); // ★プレイリスト削除時に自動同期
-    };
+    await loadPlaylists();
+    if (appState.currentPlaylistId === playlistId) {
+        appState.currentPlaylistId = null;
+        document.getElementById('current-playlist-name').textContent = "マイライブラリ (すべて)";
+        updateMainQueue();
+    }
+    autoSync();
 }
 
 function renderEditLibraryList() {
@@ -1293,9 +1358,7 @@ function initEditPage() {
         const newArtist = document.getElementById('edit-artist').value.trim();
         const newDate = document.getElementById('edit-date').value;
 
-        const transaction = db.transaction(['tracks'], 'readwrite');
-        const store = transaction.objectStore('tracks');
-
+        const tracksToUpdate = [];
         appState.selectedEditTracks.forEach(id => {
             const track = appState.tracks.find(t => t.id === id);
             if (track) {
@@ -1307,7 +1370,6 @@ function initEditPage() {
                 } else {
                     if (newArtist) track.artist = newArtist;
                     if (newDate) track.date = newDate;
-                    
                     let combinedTags = [...(track.tags || [])];
                     appState.editingTags.forEach(newTag => {
                         const exists = combinedTags.find(t => (typeof t === 'string' ? t : t.text) === newTag.text);
@@ -1315,18 +1377,21 @@ function initEditPage() {
                     });
                     track.tags = combinedTags;
                 }
-                store.put(track);
+                track.updatedAt = Date.now(); // ★
+                tracksToUpdate.push(track);
             }
         });
 
-        transaction.oncomplete = async () => {
-            await loadLibrary(); 
-            alert(`${appState.selectedEditTracks.size}曲の情報を保存しました！`);
-            appState.selectedEditTracks.clear();
-            renderEditLibraryList();
-            clearEditForm();
-            autoSync(); // ★メタデータ変更時に自動同期
-        };
+        for (let track of tracksToUpdate) {
+            await saveTrackToDB(track);
+        }
+
+        await loadLibrary(); 
+        alert(`${appState.selectedEditTracks.size}曲の情報を保存しました！`);
+        appState.selectedEditTracks.clear();
+        renderEditLibraryList();
+        clearEditForm();
+        autoSync();
     });
 }
 
