@@ -165,13 +165,13 @@ function initKeyboardShortcuts() {
         const tag = e.target.tagName.toLowerCase();
         if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
         switch (e.code) {
-            case 'Space': e.preventDefault(); togglePlay(); break;
-            case 'ArrowRight': e.preventDefault(); playNext(); break;
-            case 'ArrowLeft': e.preventDefault(); playPrev(); break;
-            case 'ArrowUp': e.preventDefault(); adjustVolume(5); break;
-            case 'ArrowDown': e.preventDefault(); adjustVolume(-5); break;
-            case 'KeyL': cycleLoopMode(); break;
-            case 'KeyS': toggleShuffle(); break;
+            case 'Space':       e.preventDefault(); togglePlay(); break;
+            case 'ArrowRight':  e.preventDefault(); playNext(); break;
+            case 'ArrowLeft':   e.preventDefault(); playPrev(); break;
+            case 'ArrowUp':     e.preventDefault(); adjustVolume(5); break;
+            case 'ArrowDown':   e.preventDefault(); adjustVolume(-5); break;
+            case 'KeyL':        cycleLoopMode(); break;
+            case 'KeyS':        toggleShuffle(); break;
         }
     });
 }
@@ -185,6 +185,7 @@ function adjustVolume(delta) {
     if (fpBar) fpBar.value = val;
     audioPlayer.volume = val / 100;
     updateVolumeIcon(val);
+    updateVolumePct(val);
 }
 
 function updateVolumeIcon(val) {
@@ -192,40 +193,45 @@ function updateVolumeIcon(val) {
     if (!btn) return;
     const icon = btn.querySelector('.material-symbols-rounded');
     if (!icon) return;
-    if (val === 0) icon.textContent = 'volume_off';
+    if (val == 0) icon.textContent = 'volume_off';
     else if (val < 50) icon.textContent = 'volume_down';
     else icon.textContent = 'volume_up';
+}
+
+function updateVolumePct(val) {
+    const pct = document.getElementById('volume-pct');
+    if (pct) pct.textContent = `${Math.round(val)}%`;
 }
 
 // ─────────────────────────────────────────────
 // 再生キューパネル
 // ─────────────────────────────────────────────
 function initQueuePanel() {
-    const queueBtn = document.getElementById('ctrl-queue');
+    const queueBtn   = document.getElementById('ctrl-queue');
     const fpQueueBtn = document.getElementById('fp-queue-btn');
-    const closeBtn = document.getElementById('close-queue-btn');
-    const overlay = document.getElementById('queue-overlay');
+    const closeBtn   = document.getElementById('close-queue-btn');
+    const overlay    = document.getElementById('queue-overlay');
 
-    if (queueBtn) queueBtn.addEventListener('click', toggleQueuePanel);
+    if (queueBtn)   queueBtn.addEventListener('click', toggleQueuePanel);
     if (fpQueueBtn) fpQueueBtn.addEventListener('click', toggleQueuePanel);
-    if (closeBtn) closeBtn.addEventListener('click', closeQueuePanel);
-    if (overlay) overlay.addEventListener('click', closeQueuePanel);
+    if (closeBtn)   closeBtn.addEventListener('click', closeQueuePanel);
+    if (overlay)    overlay.addEventListener('click', closeQueuePanel);
 }
 
 function toggleQueuePanel() {
     appState.isQueueOpen = !appState.isQueueOpen;
-    const panel = document.getElementById('queue-panel');
+    const panel   = document.getElementById('queue-panel');
     const overlay = document.getElementById('queue-overlay');
-    if (panel) panel.classList.toggle('open', appState.isQueueOpen);
+    if (panel)   panel.classList.toggle('open', appState.isQueueOpen);
     if (overlay) overlay.classList.toggle('show', appState.isQueueOpen);
     if (appState.isQueueOpen) renderQueuePanel();
 }
 
 function closeQueuePanel() {
     appState.isQueueOpen = false;
-    const panel = document.getElementById('queue-panel');
+    const panel   = document.getElementById('queue-panel');
     const overlay = document.getElementById('queue-overlay');
-    if (panel) panel.classList.remove('open');
+    if (panel)   panel.classList.remove('open');
     if (overlay) overlay.classList.remove('show');
 }
 
@@ -236,23 +242,29 @@ function renderQueuePanel() {
     appState.currentQueue.forEach((track, index) => {
         const li = document.createElement('li');
         li.className = 'queue-item' + (index === appState.currentTrackIndex ? ' current' : '');
+
         const thumb = document.createElement('div');
         thumb.className = 'queue-thumb';
         if (track.thumbnailDataUrl) {
             thumb.style.backgroundImage = `url(${track.thumbnailDataUrl})`;
-            thumb.style.backgroundSize = 'cover';
         } else {
             thumb.innerHTML = '<span class="material-symbols-rounded">music_note</span>';
         }
+
         const info = document.createElement('div');
         info.className = 'queue-item-info';
-        info.innerHTML = `<div class="queue-item-title">${track.title}</div><div class="queue-item-artist">${track.artist || '-'}</div>`;
+        info.innerHTML = `
+            <div class="queue-item-title">${track.title}</div>
+            <div class="queue-item-artist">${track.artist || '-'}</div>
+        `;
+
         li.innerHTML = `<span class="queue-item-num">${index + 1}</span>`;
         li.appendChild(thumb);
         li.appendChild(info);
         li.addEventListener('click', () => playTrack(index));
         list.appendChild(li);
     });
+
     const currentEl = list.querySelector('.current');
     if (currentEl) currentEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
@@ -264,29 +276,32 @@ function initFullscreenPlayer() {
     const closeBtn = document.getElementById('fp-close-btn');
     if (closeBtn) closeBtn.addEventListener('click', closeFullscreenPlayer);
 
-    const fpPlay = document.getElementById('fp-play');
-    const fpPrev = document.getElementById('fp-prev');
-    const fpNext = document.getElementById('fp-next');
-    const fpSeek = document.getElementById('fp-seek-bar');
-    const fpVolume = document.getElementById('fp-volume-bar');
-    const fpLoop = document.getElementById('fp-loop');
+    const fpPlay    = document.getElementById('fp-play');
+    const fpPrev    = document.getElementById('fp-prev');
+    const fpNext    = document.getElementById('fp-next');
+    const fpSeek    = document.getElementById('fp-seek-bar');
+    const fpVolume  = document.getElementById('fp-volume-bar');
+    const fpLoop    = document.getElementById('fp-loop');
     const fpShuffle = document.getElementById('fp-shuffle');
-    const fpSpeed = document.getElementById('fp-speed');
+    const fpSpeed   = document.getElementById('fp-speed');
 
-    if (fpPlay) fpPlay.addEventListener('click', togglePlay);
-    if (fpPrev) fpPrev.addEventListener('click', playPrev);
-    if (fpNext) fpNext.addEventListener('click', playNext);
-    if (fpLoop) fpLoop.addEventListener('click', cycleLoopMode);
+    if (fpPlay)    fpPlay.addEventListener('click', togglePlay);
+    if (fpPrev)    fpPrev.addEventListener('click', playPrev);
+    if (fpNext)    fpNext.addEventListener('click', playNext);
+    if (fpLoop)    fpLoop.addEventListener('click', cycleLoopMode);
     if (fpShuffle) fpShuffle.addEventListener('click', toggleShuffle);
-    if (fpSpeed) fpSpeed.addEventListener('click', cycleSpeed);
+    if (fpSpeed)   fpSpeed.addEventListener('click', cycleSpeed);
+
     if (fpSeek) fpSeek.addEventListener('input', (e) => {
-        if (audioPlayer.duration) audioPlayer.currentTime = (e.target.value / 100) * audioPlayer.duration;
+        if (audioPlayer.duration)
+            audioPlayer.currentTime = (e.target.value / 100) * audioPlayer.duration;
     });
     if (fpVolume) fpVolume.addEventListener('input', (e) => {
         audioPlayer.volume = e.target.value / 100;
         const mainVol = document.getElementById('volume-bar');
         if (mainVol) mainVol.value = e.target.value;
         updateVolumeIcon(e.target.value);
+        updateVolumePct(e.target.value);
     });
 }
 
@@ -302,16 +317,19 @@ function closeFullscreenPlayer() {
 
 function updateFullscreenPlayer(track) {
     const artwork = document.getElementById('fp-artwork');
-    const fpBg = document.getElementById('fp-bg');
-    const title = document.getElementById('fp-title');
-    const artist = document.getElementById('fp-artist');
-    if (title) title.textContent = track ? track.title : '未選択';
+    const fpBg    = document.getElementById('fp-bg');
+    const title   = document.getElementById('fp-title');
+    const artist  = document.getElementById('fp-artist');
+
+    if (title)  title.textContent  = track ? track.title         : '未選択';
     if (artist) artist.textContent = track ? (track.artist || '-') : '-';
+
     if (artwork) {
         if (track && track.thumbnailDataUrl) {
             artwork.style.backgroundImage = `url(${track.thumbnailDataUrl})`;
             artwork.innerHTML = '';
-            if (fpBg) fpBg.style.background = `linear-gradient(180deg, var(--bg-sub) 0%, var(--bg) 100%)`;
+            if (fpBg) fpBg.style.background =
+                'linear-gradient(180deg, var(--bg-sub) 0%, var(--bg) 100%)';
         } else {
             artwork.style.backgroundImage = 'none';
             artwork.innerHTML = '<span class="material-symbols-rounded">music_note</span>';
@@ -324,7 +342,7 @@ function updateFullscreenPlayer(track) {
 // ミニプレイヤー（スマホ）
 // ─────────────────────────────────────────────
 function initMiniPlayer() {
-    const miniPlayer = document.getElementById('mini-player');
+    const miniPlayer  = document.getElementById('mini-player');
     const miniPlayBtn = document.getElementById('mini-play');
     const miniPrevBtn = document.getElementById('mini-prev');
     const miniNextBtn = document.getElementById('mini-next');
@@ -333,7 +351,6 @@ function initMiniPlayer() {
     if (miniPrevBtn) miniPrevBtn.addEventListener('click', (e) => { e.stopPropagation(); playPrev(); });
     if (miniNextBtn) miniNextBtn.addEventListener('click', (e) => { e.stopPropagation(); playNext(); });
 
-    // ミニプレイヤークリックでフルスクリーン展開
     if (miniPlayer) {
         miniPlayer.addEventListener('click', (e) => {
             if (e.target.closest('button')) return;
@@ -343,11 +360,11 @@ function initMiniPlayer() {
 }
 
 function updateMiniPlayer(track) {
-    const miniThumb = document.getElementById('mini-thumb');
-    const miniTitle = document.getElementById('mini-title');
+    const miniThumb  = document.getElementById('mini-thumb');
+    const miniTitle  = document.getElementById('mini-title');
     const miniArtist = document.getElementById('mini-artist');
 
-    if (miniTitle) miniTitle.textContent = track ? track.title : '未選択';
+    if (miniTitle)  miniTitle.textContent  = track ? track.title         : '未選択';
     if (miniArtist) miniArtist.textContent = track ? (track.artist || '-') : '-';
     if (miniThumb) {
         if (track && track.thumbnailDataUrl) {
@@ -381,7 +398,10 @@ function cycleLoopMode() {
 }
 
 function updateLoopUI() {
-    const btns = [document.getElementById('ctrl-loop'), document.getElementById('fp-loop')];
+    const btns = [
+        document.getElementById('ctrl-loop'),
+        document.getElementById('fp-loop'),
+    ];
     btns.forEach(btn => {
         if (!btn) return;
         btn.classList.toggle('active', appState.loopMode !== 'none');
@@ -397,9 +417,7 @@ function toggleShuffle() {
     });
     showToast(appState.isShuffled ? 'シャッフルON' : 'シャッフルOFF');
     const sortSelect = document.getElementById('main-sort-select');
-    if (sortSelect) {
-        sortSelect.value = appState.isShuffled ? 'random' : 'manual';
-    }
+    if (sortSelect) sortSelect.value = appState.isShuffled ? 'random' : 'manual';
     appState.sortModeMain = appState.isShuffled ? 'random' : 'manual';
     updateMainQueue();
 }
@@ -434,12 +452,12 @@ function stopPlaybackTracking() {
             const track = appState.currentQueue[appState.currentTrackIndex];
             if (track) {
                 saveLogToDB({
-                    trackId: track.id,
-                    title: track.title,
-                    artist: track.artist || '不明',
-                    tags: track.tags || [],
-                    date: track.date || '',
-                    duration: elapsedSeconds,
+                    trackId:   track.id,
+                    title:     track.title,
+                    artist:    track.artist || '不明',
+                    tags:      track.tags || [],
+                    date:      track.date || '',
+                    duration:  elapsedSeconds,
                     timestamp: Date.now()
                 });
             }
@@ -450,19 +468,19 @@ function stopPlaybackTracking() {
 
 function saveLogToDB(logEntry) {
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(['logs'], 'readwrite');
+        const tx  = db.transaction(['logs'], 'readwrite');
         const req = tx.objectStore('logs').add(logEntry);
         req.onsuccess = () => resolve();
-        req.onerror = e => reject(e.target.error);
+        req.onerror   = e => reject(e.target.error);
     });
 }
 
 function getAllLogsFromDB() {
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(['logs'], 'readonly');
+        const tx  = db.transaction(['logs'], 'readonly');
         const req = tx.objectStore('logs').getAll();
         req.onsuccess = () => resolve(req.result);
-        req.onerror = e => reject(e.target.error);
+        req.onerror   = e => reject(e.target.error);
     });
 }
 
@@ -489,60 +507,143 @@ function initLogControls() {
 }
 
 async function updateLogPage() {
-    const logs = await getAllLogsFromDB();
-    const period = appState.currentLogPeriod;
+    const logs     = await getAllLogsFromDB();
+    const period   = appState.currentLogPeriod;
     const category = appState.currentLogCategory;
 
+    // ── サマリーカード ──
     const totalSeconds = logs.reduce((sum, l) => sum + l.duration, 0);
-    document.getElementById('stat-total-time').textContent = formatLogTime(totalSeconds);
-    document.getElementById('stat-total-tracks').textContent = `${appState.tracks.length} 曲`;
+    const elTotalTime = document.getElementById('stat-total-time');
+    const elTotalTracks = document.getElementById('stat-total-tracks');
+    if (elTotalTime)   elTotalTime.textContent   = formatLogTime(totalSeconds);
+    if (elTotalTracks) elTotalTracks.textContent = `${appState.tracks.length} 曲`;
 
     // 最多再生曲
     const trackTimes = {};
-    logs.forEach(l => { trackTimes[l.title || l.trackId] = (trackTimes[l.title || l.trackId] || 0) + l.duration; });
+    logs.forEach(l => {
+        const key = l.title || l.trackId;
+        trackTimes[key] = (trackTimes[key] || 0) + l.duration;
+    });
     const topTrack = Object.entries(trackTimes).sort((a, b) => b[1] - a[1])[0];
-    document.getElementById('stat-top-track').textContent = topTrack ? topTrack[0] : '-';
+    const elTopTrack = document.getElementById('stat-top-track');
+    if (elTopTrack) elTopTrack.textContent = topTrack ? topTrack[0] : '-';
 
     // 最多アーティスト
     const artistTimes = {};
-    logs.forEach(l => { if (l.artist) artistTimes[l.artist] = (artistTimes[l.artist] || 0) + l.duration; });
+    logs.forEach(l => {
+        if (l.artist) artistTimes[l.artist] = (artistTimes[l.artist] || 0) + l.duration;
+    });
     const topArtist = Object.entries(artistTimes).sort((a, b) => b[1] - a[1])[0];
-    const topArtistEl = document.getElementById('stat-top-artist');
-    if (topArtistEl) topArtistEl.textContent = topArtist ? topArtist[0] : '-';
+    const elTopArtist = document.getElementById('stat-top-artist');
+    if (elTopArtist) elTopArtist.textContent = topArtist ? topArtist[0] : '-';
 
-    // フィルタリング
-    const now = Date.now();
-    let filteredLogs = [...logs];
-    if (period === 'day') filteredLogs = logs.filter(l => now - l.timestamp <= 86400000);
-    else if (period === 'week') filteredLogs = logs.filter(l => now - l.timestamp <= 7 * 86400000);
-    else if (period === 'month') filteredLogs = logs.filter(l => now - l.timestamp <= 30 * 86400000);
-    else if (period === 'year') filteredLogs = logs.filter(l => now - l.timestamp <= 365 * 86400000);
+    // ── 期間フィルタリング ──
+    const filteredLogs = filterLogsByPeriod(logs, period);
 
     renderBarChart(filteredLogs, period, category);
     renderPieChart(filteredLogs, category);
-    renderRanking(filteredLogs, category);
+    renderTrackRanking(filteredLogs, category);
+    renderArtistRanking(filteredLogs);
 }
 
-function filterPeriodKey(log, period) {
+/**
+ * 期間に応じてログを絞り込む
+ * hour  → 今日の時間帯別（今日 0:00 ～ 現在）
+ * day   → 過去30日
+ * week  → 過去52週（364日）
+ * month → 過去12ヶ月（365日）
+ * year  → 全期間（年別集計）
+ * all   → 全期間
+ */
+function filterLogsByPeriod(logs, period) {
+    const now = Date.now();
+    if (period === 'hour')  return logs.filter(l => {
+        const d = new Date(l.timestamp);
+        const today = new Date(); today.setHours(0,0,0,0);
+        return l.timestamp >= today.getTime();
+    });
+    if (period === 'day')   return logs.filter(l => now - l.timestamp <= 30  * 86400000);
+    if (period === 'week')  return logs.filter(l => now - l.timestamp <= 364 * 86400000);
+    if (period === 'month') return logs.filter(l => now - l.timestamp <= 365 * 86400000);
+    return logs; // 'year' / 'all'
+}
+
+/**
+ * 棒グラフ・折れ線グラフ用のラベルキー生成
+ */
+function getPeriodKey(log, period) {
     const d = new Date(log.timestamp);
-    if (period === 'day') return `${d.getHours()}時`;
-    if (period === 'week' || period === 'month') return `${d.getMonth()+1}/${d.getDate()}`;
-    return `${d.getFullYear()}年${d.getMonth()+1}月`;
+    if (period === 'hour') {
+        return `${d.getHours()}時`;
+    }
+    if (period === 'day') {
+        return `${d.getMonth()+1}/${d.getDate()}`;
+    }
+    if (period === 'week') {
+        // ISO週番号
+        const jan1    = new Date(d.getFullYear(), 0, 1);
+        const weekNum = Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7);
+        return `${d.getFullYear()}-W${String(weekNum).padStart(2,'0')}`;
+    }
+    if (period === 'month') {
+        return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}`;
+    }
+    // 'year' / 'all'
+    return `${d.getFullYear()}年`;
+}
+
+/**
+ * 指定数のラベル枠を事前生成（hour: 0-23, day: 過去30日, 等）
+ */
+function buildPeriodLabels(period) {
+    const now = new Date();
+    const labels = [];
+    if (period === 'hour') {
+        for (let h = 0; h < 24; h++) labels.push(`${h}時`);
+        return labels;
+    }
+    if (period === 'day') {
+        for (let i = 29; i >= 0; i--) {
+            const d = new Date(now); d.setDate(d.getDate() - i);
+            labels.push(`${d.getMonth()+1}/${d.getDate()}`);
+        }
+        return labels;
+    }
+    if (period === 'week') {
+        for (let i = 51; i >= 0; i--) {
+            const d = new Date(now); d.setDate(d.getDate() - i * 7);
+            const jan1    = new Date(d.getFullYear(), 0, 1);
+            const weekNum = Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7);
+            labels.push(`${d.getFullYear()}-W${String(weekNum).padStart(2,'0')}`);
+        }
+        return labels;
+    }
+    if (period === 'month') {
+        for (let i = 11; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            labels.push(`${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}`);
+        }
+        return labels;
+    }
+    return null; // year / all: 動的生成
 }
 
 function groupLogsByCategory(logs, category) {
     const grouped = {};
     logs.forEach(l => {
         let key;
-        if (category === 'artist') key = l.artist || '不明';
-        else if (category === 'tag') {
+        if (category === 'artist') {
+            key = l.artist || '不明';
+        } else if (category === 'tag') {
             if (l.tags && l.tags.length > 0) {
                 l.tags.forEach(t => {
                     const text = typeof t === 'string' ? t : t.text;
                     grouped[text] = (grouped[text] || 0) + l.duration;
                 });
                 return;
-            } else key = 'タグなし';
+            } else {
+                key = 'タグなし';
+            }
         } else if (category === 'decade') {
             const m = (l.date || '').match(/\d{4}/);
             key = m ? `${Math.floor(parseInt(m[0]) / 10) * 10}年代` : '不明';
@@ -557,28 +658,55 @@ function renderBarChart(filteredLogs, period, category) {
     if (!ctx) return;
     if (logChartInstance) { logChartInstance.destroy(); logChartInstance = null; }
 
-    let labels = [], data = [], chartType = 'bar';
-
-    const titleMap = { total: '再生時間の推移', artist: 'アーティスト別再生時間', tag: 'タグ別再生時間', decade: '年代別再生時間' };
+    const titleMap = {
+        total:  '再生時間の推移',
+        artist: 'アーティスト別 再生時間',
+        tag:    'タグ別 再生時間',
+        decade: '年代別 再生時間',
+    };
     const titleEl = document.getElementById('bar-chart-title');
-    if (titleEl) titleEl.textContent = titleMap[category] || '';
+    if (titleEl) titleEl.textContent = titleMap[category] || '再生時間';
+
+    const periodLabels = {
+        all:   '全期間',
+        hour:  '時間帯別（今日）',
+        day:   '日別（過去30日）',
+        week:  '週別（過去52週）',
+        month: '月別（過去12ヶ月）',
+        year:  '年別',
+    };
+    if (titleEl) titleEl.textContent =
+        `${titleMap[category] || '再生時間'} ／ ${periodLabels[period] || ''}`;
+
+    let labels = [];
+    let data   = [];
+    let chartType = category === 'total' ? 'line' : 'bar';
 
     if (category === 'total') {
-        chartType = 'line';
-        const grouped = {}, orderMap = {};
+        // 時系列集計
+        const preBuild = buildPeriodLabels(period);
+        const grouped  = {};
+        const orderMap = {};
+
         filteredLogs.forEach(l => {
-            const key = filterPeriodKey(l, period);
-            grouped[key] = (grouped[key] || 0) + l.duration;
+            const key = getPeriodKey(l, period);
+            grouped[key]  = (grouped[key]  || 0) + l.duration;
             if (!orderMap[key] || l.timestamp < orderMap[key]) orderMap[key] = l.timestamp;
         });
-        const sortedKeys = Object.keys(grouped).sort((a, b) => orderMap[a] - orderMap[b]);
-        labels = sortedKeys;
-        data = sortedKeys.map(k => +(grouped[k] / 60).toFixed(1));
+
+        if (preBuild) {
+            labels = preBuild;
+            data   = labels.map(lb => +(( grouped[lb] || 0) / 60).toFixed(1));
+        } else {
+            const sortedKeys = Object.keys(grouped).sort((a, b) => orderMap[a] - orderMap[b]);
+            labels = sortedKeys;
+            data   = sortedKeys.map(k => +(grouped[k] / 60).toFixed(1));
+        }
     } else {
         const grouped = groupLogsByCategory(filteredLogs, category);
-        const sorted = Object.entries(grouped).sort((a, b) => b[1] - a[1]).slice(0, 15);
+        const sorted  = Object.entries(grouped).sort((a, b) => b[1] - a[1]).slice(0, 15);
         labels = sorted.map(x => x[0]);
-        data = sorted.map(x => +(x[1] / 60).toFixed(1));
+        data   = sorted.map(x => +(x[1] / 60).toFixed(1));
     }
 
     logChartInstance = new Chart(ctx.getContext('2d'), {
@@ -607,24 +735,24 @@ function renderBarChart(filteredLogs, period, category) {
                 y: {
                     beginAtZero: true,
                     title: { display: true, text: '再生時間（分）', font: { size: 11, family: 'Noto Sans JP' } },
-                    grid: { color: 'rgba(0,0,0,0.04)' },
+                    grid:  { color: 'rgba(0,0,0,0.04)' },
                     ticks: { font: { size: 11, family: 'Noto Sans JP' } }
                 },
                 x: {
-                    grid: { display: false },
-                    ticks: { font: { size: 11, family: 'Noto Sans JP' }, maxRotation: 45 }
+                    grid:  { display: false },
+                    ticks: { font: { size: 11, family: 'Noto Sans JP' }, maxRotation: 45, autoSkip: true, maxTicksLimit: 20 }
                 }
             },
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    backgroundColor: 'rgba(17,17,21,0.9)',
+                    backgroundColor: 'rgba(15,16,20,0.92)',
                     titleFont: { size: 12, family: 'Noto Sans JP' },
-                    bodyFont: { size: 11, family: 'Noto Sans JP' },
+                    bodyFont:  { size: 11, family: 'Noto Sans JP' },
                     padding: 10,
                     cornerRadius: 8,
                     callbacks: {
-                        label: (ctx) => `${ctx.raw} 分`
+                        label: (ctx) => ` ${ctx.raw} 分`
                     }
                 }
             }
@@ -633,20 +761,20 @@ function renderBarChart(filteredLogs, period, category) {
 }
 
 function renderPieChart(filteredLogs, category) {
-    const ctx = document.getElementById('logPieChart');
+    const ctx  = document.getElementById('logPieChart');
     const card = document.getElementById('pie-chart-card');
     if (!ctx) return;
     if (logPieChartInstance) { logPieChartInstance.destroy(); logPieChartInstance = null; }
 
     const titleEl = document.getElementById('pie-chart-title');
     const catLabels = { total: '時間帯別', artist: 'アーティスト別', tag: 'タグ別', decade: '年代別' };
-    if (titleEl) titleEl.textContent = catLabels[category] + '構成比';
+    if (titleEl) titleEl.textContent = (catLabels[category] || '') + '構成比';
 
     const grouped = category === 'total'
         ? (() => {
             const g = {};
             filteredLogs.forEach(l => {
-                const h = new Date(l.timestamp).getHours();
+                const h   = new Date(l.timestamp).getHours();
                 const key = h < 6 ? '深夜 (0-6時)' : h < 12 ? '午前 (6-12時)' : h < 18 ? '午後 (12-18時)' : '夜 (18-24時)';
                 g[key] = (g[key] || 0) + l.duration;
             });
@@ -655,13 +783,14 @@ function renderPieChart(filteredLogs, category) {
         : groupLogsByCategory(filteredLogs, category);
 
     const entries = Object.entries(grouped).sort((a, b) => b[1] - a[1]).slice(0, 8);
-    const labels = entries.map(x => x[0]);
-    const data = entries.map(x => +(x[1] / 60).toFixed(1));
+    const labels  = entries.map(x => x[0]);
+    const data    = entries.map(x => +(x[1] / 60).toFixed(1));
 
     const COLORS = [
-        'rgba(26,110,245,0.8)', 'rgba(52,199,89,0.8)', 'rgba(255,149,0,0.8)',
-        'rgba(229,57,53,0.8)', 'rgba(88,86,214,0.8)', 'rgba(90,200,250,0.8)',
-        'rgba(255,204,0,0.8)', 'rgba(175,82,222,0.8)'
+        'rgba(26,110,245,0.8)',  'rgba(52,199,89,0.8)',
+        'rgba(255,149,0,0.8)',   'rgba(229,57,53,0.8)',
+        'rgba(88,86,214,0.8)',   'rgba(90,200,250,0.8)',
+        'rgba(255,204,0,0.8)',   'rgba(175,82,222,0.8)'
     ];
 
     if (data.length === 0) {
@@ -698,9 +827,9 @@ function renderPieChart(filteredLogs, category) {
                     }
                 },
                 tooltip: {
-                    backgroundColor: 'rgba(17,17,21,0.9)',
+                    backgroundColor: 'rgba(15,16,20,0.92)',
                     titleFont: { size: 12, family: 'Noto Sans JP' },
-                    bodyFont: { size: 11, family: 'Noto Sans JP' },
+                    bodyFont:  { size: 11, family: 'Noto Sans JP' },
                     padding: 10,
                     cornerRadius: 8,
                     callbacks: {
@@ -712,48 +841,164 @@ function renderPieChart(filteredLogs, category) {
     });
 }
 
-function renderRanking(filteredLogs, category) {
-    const list = document.getElementById('ranking-list');
+/**
+ * 曲別ランキング（サムネイル・タグ・アーティスト・年代 付き）
+ */
+function renderTrackRanking(filteredLogs, category) {
+    const list  = document.getElementById('ranking-list');
     const title = document.getElementById('ranking-title');
     if (!list) return;
 
-    const catNames = { total: '曲', artist: 'アーティスト', tag: 'タグ', decade: '年代' };
-    if (title) title.textContent = `${catNames[category] || ''} 再生時間ランキング`;
+    const catNames = { total: '曲別', artist: 'アーティスト別', tag: 'タグ別', decade: '年代別' };
+    if (title) title.textContent = `${catNames[category] || '曲別'} 再生時間ランキング`;
 
     let grouped;
     if (category === 'total') {
         grouped = {};
         filteredLogs.forEach(l => {
-            grouped[l.title || l.trackId] = (grouped[l.title || l.trackId] || 0) + l.duration;
+            const key = l.trackId || l.title;
+            grouped[key] = (grouped[key] || 0) + l.duration;
         });
     } else {
         grouped = groupLogsByCategory(filteredLogs, category);
     }
 
-    const sorted = Object.entries(grouped).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    const sorted = Object.entries(grouped).sort((a, b) => b[1] - a[1]).slice(0, 15);
     const maxVal = sorted[0] ? sorted[0][1] : 1;
 
     list.innerHTML = '';
-    sorted.forEach(([name, seconds], i) => {
+
+    if (sorted.length === 0) {
+        list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:13px;">データがありません</div>';
+        return;
+    }
+
+    sorted.forEach(([key, seconds], i) => {
         const pct = Math.round((seconds / maxVal) * 100);
-        const li = document.createElement('li');
-        li.className = 'ranking-item';
-        li.innerHTML = `
-            <span class="rank-num ${i < 3 ? 'top' : ''}">${i + 1}</span>
-            <div class="rank-bar-area">
-                <div class="rank-name">${name}</div>
+
+        // 対応するトラック情報を検索
+        let track = null;
+        if (category === 'total') {
+            track = appState.tracks.find(t => t.id === key) ||
+                    appState.tracks.find(t => t.title === key);
+        }
+
+        const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+
+        const item = document.createElement('div');
+        item.className = 'ranking-item';
+
+        // サムネイル
+        let thumbHtml;
+        if (track && track.thumbnailDataUrl) {
+            thumbHtml = `<div class="rank-thumb" style="background-image:url(${track.thumbnailDataUrl});"></div>`;
+        } else if (category === 'total') {
+            thumbHtml = `<div class="rank-thumb"><span class="material-symbols-rounded">music_note</span></div>`;
+        } else if (category === 'artist') {
+            thumbHtml = `<div class="rank-thumb"><span class="material-symbols-rounded">mic</span></div>`;
+        } else if (category === 'tag') {
+            thumbHtml = `<div class="rank-thumb"><span class="material-symbols-rounded">label</span></div>`;
+        } else {
+            thumbHtml = `<div class="rank-thumb"><span class="material-symbols-rounded">calendar_month</span></div>`;
+        }
+
+        // メタ情報（アーティスト・タグ）
+        let metaHtml = '';
+        let tagsHtml = '';
+        if (category === 'total' && track) {
+            if (track.artist) metaHtml = `<div class="rank-meta">${track.artist}</div>`;
+            if (track.tags && track.tags.length > 0) {
+                tagsHtml = '<div class="rank-tags">' +
+                    track.tags.slice(0, 3).map(t => {
+                        const tObj = typeof t === 'string' ? { text: t, color: '#ccc' } : t;
+                        return `<span class="rank-tag" style="border:1px solid ${tObj.color};background:${tObj.color}22;">${tObj.text}</span>`;
+                    }).join('') + '</div>';
+            }
+            if (track.date) {
+                const year  = (track.date.match(/\d{4}/) || [])[0];
+                if (year) metaHtml += `<div class="rank-meta" style="font-size:10px;color:var(--text-tertiary);">${year}年</div>`;
+            }
+        } else if (category === 'artist') {
+            // そのアーティストの曲数
+            const cnt = appState.tracks.filter(t => (t.artist || '不明') === key).length;
+            if (cnt > 0) metaHtml = `<div class="rank-meta">${cnt}曲</div>`;
+        }
+
+        // 表示名
+        let displayName = key;
+        if (category === 'total' && track) displayName = track.title;
+
+        item.innerHTML = `
+            <span class="rank-num ${rankClass}">${i + 1}</span>
+            ${thumbHtml}
+            <div class="rank-info">
+                <div class="rank-name">${displayName}</div>
+                ${metaHtml}
+                ${tagsHtml}
+            </div>
+            <div class="rank-right">
+                <span class="rank-time">${formatLogTime(seconds)}</span>
                 <div class="rank-bar-track">
                     <div class="rank-bar-fill" style="width:${pct}%"></div>
                 </div>
             </div>
-            <span class="rank-time">${formatLogTime(seconds)}</span>
         `;
-        list.appendChild(li);
+        list.appendChild(item);
+    });
+}
+
+/**
+ * アーティスト別ランキング（常時表示）
+ */
+function renderArtistRanking(filteredLogs) {
+    const section = document.getElementById('artist-ranking-section');
+    const list    = document.getElementById('artist-ranking-list');
+    if (!list) return;
+
+    const artistTimes = {};
+    filteredLogs.forEach(l => {
+        const key = l.artist || '不明';
+        artistTimes[key] = (artistTimes[key] || 0) + l.duration;
     });
 
-    if (sorted.length === 0) {
-        list.innerHTML = '<li style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:13px;">データがありません</li>';
+    const sorted = Object.entries(artistTimes).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    const maxVal = sorted[0] ? sorted[0][1] : 1;
+
+    // アーティストランキングはカテゴリが artist のときは重複表示になるため非表示
+    if (section) {
+        section.style.display = appState.currentLogCategory === 'artist' ? 'none' : '';
     }
+
+    list.innerHTML = '';
+
+    if (sorted.length === 0) {
+        list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:13px;">データがありません</div>';
+        return;
+    }
+
+    sorted.forEach(([artist, seconds], i) => {
+        const pct       = Math.round((seconds / maxVal) * 100);
+        const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+        const cnt       = appState.tracks.filter(t => (t.artist || '不明') === artist).length;
+
+        const item = document.createElement('div');
+        item.className = 'ranking-item';
+        item.innerHTML = `
+            <span class="rank-num ${rankClass}">${i + 1}</span>
+            <div class="rank-thumb"><span class="material-symbols-rounded">mic</span></div>
+            <div class="rank-info">
+                <div class="rank-name">${artist}</div>
+                ${cnt > 0 ? `<div class="rank-meta">${cnt}曲</div>` : ''}
+            </div>
+            <div class="rank-right">
+                <span class="rank-time">${formatLogTime(seconds)}</span>
+                <div class="rank-bar-track">
+                    <div class="rank-bar-fill" style="width:${pct}%"></div>
+                </div>
+            </div>
+        `;
+        list.appendChild(item);
+    });
 }
 
 function formatLogTime(seconds) {
@@ -768,7 +1013,7 @@ function formatLogTime(seconds) {
 // Google ログイン & Drive連携
 // ─────────────────────────────────────────────
 function initAuthUI() {
-    const btnLogin = document.getElementById('btn-login');
+    const btnLogin  = document.getElementById('btn-login');
     const btnLogout = document.getElementById('btn-logout');
 
     btnLogin.addEventListener('click', () => {
@@ -793,7 +1038,8 @@ function initAuthUI() {
     });
 
     btnLogout.addEventListener('click', () => {
-        if (gapiAccessToken && typeof google !== 'undefined') google.accounts.oauth2.revoke(gapiAccessToken, () => {});
+        if (gapiAccessToken && typeof google !== 'undefined')
+            google.accounts.oauth2.revoke(gapiAccessToken, () => {});
         gapiAccessToken = null;
         appState.isLoggedIn = false;
         appState.user = null;
@@ -838,21 +1084,22 @@ async function performDriveSync() {
     if (syncStatus) syncStatus.textContent = '同期中...';
 
     try {
-        const folderId = await getOrCreateSyncFolder();
+        const folderId       = await getOrCreateSyncFolder();
         const existingJsonId = await findDriveFile('library_sync.json', 'application/json', folderId);
         let remoteData = null;
         if (existingJsonId) {
-            const res = await fetch(`https://www.googleapis.com/drive/v3/files/${existingJsonId}?alt=media`, {
-                headers: { Authorization: `Bearer ${gapiAccessToken}` }
-            });
+            const res = await fetch(
+                `https://www.googleapis.com/drive/v3/files/${existingJsonId}?alt=media`,
+                { headers: { Authorization: `Bearer ${gapiAccessToken}` } }
+            );
             if (res.ok) remoteData = await res.json();
         }
 
-        const remoteTracks = remoteData ? remoteData.tracks || [] : [];
+        const remoteTracks    = remoteData ? remoteData.tracks    || [] : [];
         const remotePlaylists = remoteData ? remoteData.playlists || [] : [];
-        const localTracks = await getAllTracksFromDBRaw();
-        const localPlaylists = await getAllPlaylistsFromDBRaw();
-        const localTrackMap = new Map(localTracks.map(t => [t.id, t]));
+        const localTracks     = await getAllTracksFromDBRaw();
+        const localPlaylists  = await getAllPlaylistsFromDBRaw();
+        const localTrackMap    = new Map(localTracks.map(t  => [t.id,  t]));
         const localPlaylistMap = new Map(localPlaylists.map(p => [p.id, p]));
 
         for (let rTrack of remoteTracks) {
@@ -886,27 +1133,29 @@ async function performDriveSync() {
 
         for (let lTrack of localTrackMap.values()) {
             if (!lTrack.deleted && !lTrack.driveFileId && lTrack.fileBlob) {
-                if (syncStatus) syncStatus.textContent = `UP中: ${lTrack.title}`;
-                const fileId = await uploadFileToDrive(lTrack.fileBlob, lTrack.fileName, lTrack.fileBlob.type, folderId);
+                const fileId = await uploadFileToDrive(
+                    lTrack.fileBlob, lTrack.fileName || lTrack.title,
+                    lTrack.fileBlob.type || 'audio/mpeg', folderId
+                );
                 lTrack.driveFileId = fileId;
-                lTrack.updatedAt = Date.now();
+                lTrack.updatedAt   = Date.now();
                 await saveTrackToDB(lTrack);
+                localTrackMap.set(lTrack.id, lTrack);
             }
         }
 
         for (let rPl of remotePlaylists) {
-            let lPl = localPlaylistMap.get(rPl.id);
-            if (!lPl) { await savePlaylistToDB(rPl); localPlaylistMap.set(rPl.id, rPl); }
-            else {
-                const rTime = rPl.updatedAt || 0, lTime = lPl.updatedAt || 0;
-                if (rTime > lTime) { await savePlaylistToDB(rPl); localPlaylistMap.set(rPl.id, rPl); }
+            const lPl = localPlaylistMap.get(rPl.id);
+            if (!lPl || (rPl.updatedAt || 0) > (lPl.updatedAt || 0)) {
+                await savePlaylistToDB(rPl);
+                localPlaylistMap.set(rPl.id, rPl);
             }
         }
 
-        if (syncStatus) syncStatus.textContent = '保存中...';
-        const finalTracksToSync = Array.from(localTrackMap.values()).map(t => { const { fileBlob, ...rest } = t; return rest; });
-        const syncData = { tracks: finalTracksToSync, playlists: Array.from(localPlaylistMap.values()), lastSyncedAt: Date.now() };
-        await uploadFileToDrive(new Blob([JSON.stringify(syncData)], { type: 'application/json' }), 'library_sync.json', 'application/json', folderId, existingJsonId);
+        const mergedTracks    = Array.from(localTrackMap.values()).map(t => { const c = {...t}; delete c.fileBlob; return c; });
+        const mergedPlaylists = Array.from(localPlaylistMap.values());
+        const jsonBlob        = new Blob([JSON.stringify({ tracks: mergedTracks, playlists: mergedPlaylists })], { type: 'application/json' });
+        await uploadFileToDrive(jsonBlob, 'library_sync.json', 'application/json', folderId, existingJsonId);
 
         await loadLibrary();
         await loadPlaylists();
@@ -935,11 +1184,12 @@ async function getOrCreateSyncFolder() {
 
 async function findDriveFile(name, mimeType, parentId = null) {
     let q = `name='${name}' and trashed=false`;
-    if (mimeType) q += ` and mimeType='${mimeType}'`;
-    if (parentId) q += ` and '${parentId}' in parents`;
-    const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)`, {
-        headers: { Authorization: `Bearer ${gapiAccessToken}` }
-    });
+    if (mimeType)  q += ` and mimeType='${mimeType}'`;
+    if (parentId)  q += ` and '${parentId}' in parents`;
+    const res  = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)`,
+        { headers: { Authorization: `Bearer ${gapiAccessToken}` } }
+    );
     const data = await res.json();
     return (data.files && data.files.length > 0) ? data.files[0].id : null;
 }
@@ -965,9 +1215,10 @@ async function uploadFileToDrive(blob, filename, mimeType, folderId, existingId 
 async function downloadFileFromDrive(fileId, syncStatusElement, title) {
     if (syncStatusElement) syncStatusElement.textContent = `DL中: ${title || ''}`;
     try {
-        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-            headers: { Authorization: `Bearer ${gapiAccessToken}` }
-        });
+        const res = await fetch(
+            `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+            { headers: { Authorization: `Bearer ${gapiAccessToken}` } }
+        );
         if (res.ok) return await res.blob();
     } catch (e) { console.error('ファイルダウンロード失敗:', e); }
     return null;
@@ -979,20 +1230,24 @@ async function downloadFileFromDrive(fileId, syncStatusElement, title) {
 function initDB() {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
-        request.onerror = (e) => reject(e.target.error);
+        request.onerror   = (e) => reject(e.target.error);
         request.onsuccess = (e) => { db = e.target.result; resolve(db); };
         request.onupgradeneeded = (e) => {
             const database = e.target.result;
-            if (!database.objectStoreNames.contains('tracks')) database.createObjectStore('tracks', { keyPath: 'id' });
-            if (!database.objectStoreNames.contains('playlists')) database.createObjectStore('playlists', { keyPath: 'id' });
-            if (!database.objectStoreNames.contains('logs')) database.createObjectStore('logs', { keyPath: 'id', autoIncrement: true });
+            if (!database.objectStoreNames.contains('tracks'))
+                database.createObjectStore('tracks',    { keyPath: 'id' });
+            if (!database.objectStoreNames.contains('playlists'))
+                database.createObjectStore('playlists', { keyPath: 'id' });
+            if (!database.objectStoreNames.contains('logs'))
+                database.createObjectStore('logs',      { keyPath: 'id', autoIncrement: true });
         };
     });
 }
 
 function initPlaylistPlaybackControls() {
-    const playAllBtn = document.getElementById('btn-play-all');
+    const playAllBtn    = document.getElementById('btn-play-all');
     const shuffleAllBtn = document.getElementById('btn-shuffle-all');
+
     if (playAllBtn) playAllBtn.addEventListener('click', () => {
         if (appState.currentQueue.length === 0) return;
         if (appState.sortModeMain === 'random') {
@@ -1001,6 +1256,7 @@ function initPlaylistPlaybackControls() {
         }
         playTrack(0);
     });
+
     if (shuffleAllBtn) shuffleAllBtn.addEventListener('click', () => {
         if (appState.currentQueue.length === 0) return;
         const sel = document.getElementById('main-sort-select');
@@ -1059,14 +1315,14 @@ function updateMainQueue() {
     } else if (appState.sortModeMain !== 'manual') {
         baseList.sort((a, b) => {
             switch (appState.sortModeMain) {
-                case 'date_desc': return b.addedAt - a.addedAt;
-                case 'date_asc': return a.addedAt - b.addedAt;
-                case 'name_asc': return a.title.localeCompare(b.title);
-                case 'name_desc': return b.title.localeCompare(a.title);
-                case 'artist_asc': return (a.artist||'').localeCompare(b.artist||'');
-                case 'artist_desc': return (b.artist||'').localeCompare(a.artist||'');
+                case 'date_desc':    return b.addedAt - a.addedAt;
+                case 'date_asc':     return a.addedAt - b.addedAt;
+                case 'name_asc':     return a.title.localeCompare(b.title);
+                case 'name_desc':    return b.title.localeCompare(a.title);
+                case 'artist_asc':   return (a.artist||'').localeCompare(b.artist||'');
+                case 'artist_desc':  return (b.artist||'').localeCompare(a.artist||'');
                 case 'release_desc': return (b.date||'').localeCompare(a.date||'');
-                case 'release_asc': return (a.date||'').localeCompare(b.date||'');
+                case 'release_asc':  return (a.date||'').localeCompare(b.date||'');
                 default: return 0;
             }
         });
@@ -1074,11 +1330,12 @@ function updateMainQueue() {
 
     appState.currentQueue = baseList;
 
-    // ドロップゾーン表示切替
     const dropZone = document.getElementById('drop-zone');
     if (dropZone) {
-        if (appState.tracks.length === 0 && !appState.searchQueryMain) dropZone.classList.add('show');
-        else dropZone.classList.remove('show');
+        if (appState.tracks.length === 0 && !appState.searchQueryMain)
+            dropZone.classList.add('show');
+        else
+            dropZone.classList.remove('show');
     }
 
     renderMainTrackList();
@@ -1089,22 +1346,23 @@ function updateMainQueue() {
 // プレイヤーコントロール
 // ─────────────────────────────────────────────
 function initPlayerControls() {
-    const playBtn = document.getElementById('ctrl-play');
-    const prevBtn = document.getElementById('ctrl-prev');
-    const nextBtn = document.getElementById('ctrl-next');
-    const seekBar = document.getElementById('seek-bar');
-    const volumeBar = document.getElementById('volume-bar');
-    const loopBtn = document.getElementById('ctrl-loop');
-    const speedBtn = document.getElementById('ctrl-speed');
+    const playBtn    = document.getElementById('ctrl-play');
+    const prevBtn    = document.getElementById('ctrl-prev');
+    const nextBtn    = document.getElementById('ctrl-next');
+    const seekBar    = document.getElementById('seek-bar');
+    const volumeBar  = document.getElementById('volume-bar');
+    const loopBtn    = document.getElementById('ctrl-loop');
+    const speedBtn   = document.getElementById('ctrl-speed');
     const shuffleBtn = document.getElementById('ctrl-shuffle');
-    const muteBtn = document.getElementById('ctrl-mute');
+    const muteBtn    = document.getElementById('ctrl-mute');
 
-    if (playBtn) playBtn.addEventListener('click', togglePlay);
-    if (nextBtn) nextBtn.addEventListener('click', playNext);
-    if (prevBtn) prevBtn.addEventListener('click', playPrev);
-    if (loopBtn) loopBtn.addEventListener('click', cycleLoopMode);
-    if (speedBtn) speedBtn.addEventListener('click', cycleSpeed);
+    if (playBtn)    playBtn.addEventListener('click', togglePlay);
+    if (nextBtn)    nextBtn.addEventListener('click', playNext);
+    if (prevBtn)    prevBtn.addEventListener('click', playPrev);
+    if (loopBtn)    loopBtn.addEventListener('click', cycleLoopMode);
+    if (speedBtn)   speedBtn.addEventListener('click', cycleSpeed);
     if (shuffleBtn) shuffleBtn.addEventListener('click', toggleShuffle);
+
     if (muteBtn) muteBtn.addEventListener('click', () => {
         audioPlayer.muted = !audioPlayer.muted;
         const icon = muteBtn.querySelector('.material-symbols-rounded');
@@ -1112,53 +1370,66 @@ function initPlayerControls() {
     });
 
     if (seekBar) seekBar.addEventListener('input', (e) => {
-        if (audioPlayer.duration) audioPlayer.currentTime = (e.target.value / 100) * audioPlayer.duration;
+        if (audioPlayer.duration)
+            audioPlayer.currentTime = (e.target.value / 100) * audioPlayer.duration;
     });
+
     if (volumeBar) {
         volumeBar.addEventListener('input', (e) => {
             audioPlayer.volume = e.target.value / 100;
             const fpVol = document.getElementById('fp-volume-bar');
             if (fpVol) fpVol.value = e.target.value;
             updateVolumeIcon(e.target.value);
+            updateVolumePct(e.target.value);
         });
         audioPlayer.volume = volumeBar.value / 100;
+        updateVolumePct(volumeBar.value);
     }
 
+    // 再生位置・プログレス更新
     audioPlayer.addEventListener('timeupdate', () => {
         if (!audioPlayer.duration) return;
         const pct = (audioPlayer.currentTime / audioPlayer.duration) * 100;
 
         if (seekBar) {
             seekBar.value = pct;
-            seekBar.style.background = `linear-gradient(to right, var(--accent) ${pct}%, var(--border) ${pct}%)`;
+            seekBar.style.background =
+                `linear-gradient(to right, var(--accent) ${pct}%, var(--border) ${pct}%)`;
         }
         const fpSeek = document.getElementById('fp-seek-bar');
         if (fpSeek) {
             fpSeek.value = pct;
-            fpSeek.style.background = `linear-gradient(to right, var(--accent) ${pct}%, var(--border) ${pct}%)`;
+            fpSeek.style.background =
+                `linear-gradient(to right, var(--accent) ${pct}%, var(--border) ${pct}%)`;
         }
 
         const cur = formatTime(audioPlayer.currentTime);
         const tot = formatTime(audioPlayer.duration);
+
         const tcEl = document.getElementById('time-current');
         const ttEl = document.getElementById('time-total');
         if (tcEl) tcEl.textContent = cur;
         if (ttEl) ttEl.textContent = tot;
+
         const fpCur = document.getElementById('fp-time-current');
         const fpTot = document.getElementById('fp-time-total');
         if (fpCur) fpCur.textContent = cur;
         if (fpTot) fpTot.textContent = tot;
 
-        // ミニプレイヤーのプログレスバー
         const miniBar = document.getElementById('mini-progress-bar');
         if (miniBar) miniBar.style.width = `${pct}%`;
     });
 
+    // 曲終了時
     audioPlayer.addEventListener('ended', () => {
         stopPlaybackTracking();
         if (appState.loopMode === 'one') {
             audioPlayer.currentTime = 0;
-            audioPlayer.play().then(() => { appState.isPlaying = true; startPlaybackTracking(); updatePlayButtonUI(); });
+            audioPlayer.play().then(() => {
+                appState.isPlaying = true;
+                startPlaybackTracking();
+                updatePlayButtonUI();
+            });
         } else if (appState.loopMode === 'all') {
             let nextIndex = appState.currentTrackIndex + 1;
             if (nextIndex >= appState.currentQueue.length) nextIndex = 0;
@@ -1175,13 +1446,15 @@ function playTrack(index) {
     stopPlaybackTracking();
     const track = appState.currentQueue[index];
     appState.currentTrackIndex = index;
+
     if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
 
     if (track.fileBlob) {
         currentObjectUrl = URL.createObjectURL(track.fileBlob);
-        audioPlayer.src = currentObjectUrl;
+        audioPlayer.src  = currentObjectUrl;
     } else if (appState.isStreaming && track.driveFileId && gapiAccessToken) {
-        audioPlayer.src = `https://www.googleapis.com/drive/v3/files/${track.driveFileId}?alt=media&access_token=${gapiAccessToken}`;
+        audioPlayer.src =
+            `https://www.googleapis.com/drive/v3/files/${track.driveFileId}?alt=media&access_token=${gapiAccessToken}`;
     } else {
         showToast('音声ファイルが見つかりません', 'error');
         return;
@@ -1205,7 +1478,10 @@ function togglePlay() {
         stopPlaybackTracking();
     } else {
         if (audioPlayer.src) {
-            audioPlayer.play().then(() => { appState.isPlaying = true; startPlaybackTracking(); });
+            audioPlayer.play().then(() => {
+                appState.isPlaying = true;
+                startPlaybackTracking();
+            });
         } else {
             playTrack(0);
         }
@@ -1230,15 +1506,13 @@ function playPrev() {
 }
 
 function updatePlayerUI(track) {
-    // タイトル・アーティスト（PC左パネル）
-    const npTitle = document.getElementById('np-title');
+    const npTitle  = document.getElementById('np-title');
     const npArtist = document.getElementById('np-artist');
-    if (npTitle) npTitle.textContent = track.title;
+    if (npTitle)  npTitle.textContent  = track.title;
     if (npArtist) npArtist.textContent = track.artist || '-';
 
-    // アルバムアート
     const artworkImage = document.getElementById('artwork-image');
-    const artworkBg = document.getElementById('artwork-bg');
+    const artworkBg    = document.getElementById('artwork-bg');
     if (artworkImage) {
         if (track.thumbnailDataUrl) {
             artworkImage.style.backgroundImage = `url(${track.thumbnailDataUrl})`;
@@ -1251,11 +1525,9 @@ function updatePlayerUI(track) {
         }
     }
     if (artworkBg) {
-        if (track.thumbnailDataUrl) artworkBg.classList.add('visible');
-        else artworkBg.classList.remove('visible');
+        artworkBg.classList.toggle('visible', !!track.thumbnailDataUrl);
     }
 
-    // ミニプレイヤー・フルスクリーン更新
     updateMiniPlayer(track);
     updateFullscreenPlayer(track);
     updatePlayButtonUI();
@@ -1263,14 +1535,14 @@ function updatePlayerUI(track) {
     // MediaSession API（通知バー）
     if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
-            title: track.title,
-            artist: track.artist || '',
+            title:   track.title,
+            artist:  track.artist || '',
             artwork: track.thumbnailDataUrl ? [{ src: track.thumbnailDataUrl }] : []
         });
-        navigator.mediaSession.setActionHandler('play', togglePlay);
-        navigator.mediaSession.setActionHandler('pause', togglePlay);
+        navigator.mediaSession.setActionHandler('play',          togglePlay);
+        navigator.mediaSession.setActionHandler('pause',         togglePlay);
         navigator.mediaSession.setActionHandler('previoustrack', playPrev);
-        navigator.mediaSession.setActionHandler('nexttrack', playNext);
+        navigator.mediaSession.setActionHandler('nexttrack',     playNext);
     }
 }
 
@@ -1289,16 +1561,15 @@ function updatePlayButtonUI() {
 // ドラッグ&ドロップ / ファイル読み込み
 // ─────────────────────────────────────────────
 function initDragAndDrop() {
-    const dropZone = document.getElementById('drop-zone');
+    const dropZone      = document.getElementById('drop-zone');
     const dropZoneSmall = document.getElementById('drop-zone-small');
-    const fileInput = document.getElementById('file-upload');
+    const fileInput     = document.getElementById('file-upload');
 
     if (fileInput) fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
 
-    // 大きいドロップゾーン
     if (dropZone) {
-        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
-        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('dragover',  (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', ()  => dropZone.classList.remove('dragover'));
         dropZone.addEventListener('drop', (e) => {
             e.preventDefault(); dropZone.classList.remove('dragover');
             if (e.dataTransfer.files) handleFiles(e.dataTransfer.files);
@@ -1306,18 +1577,16 @@ function initDragAndDrop() {
         dropZone.addEventListener('click', () => fileInput && fileInput.click());
     }
 
-    // 小さいドロップゾーン（ヘッダー）
     if (dropZoneSmall) {
-        dropZoneSmall.addEventListener('click', () => fileInput && fileInput.click());
-        dropZoneSmall.addEventListener('dragover', (e) => { e.preventDefault(); dropZoneSmall.classList.add('dragover'); });
-        dropZoneSmall.addEventListener('dragleave', () => dropZoneSmall.classList.remove('dragover'));
+        dropZoneSmall.addEventListener('click',    ()  => fileInput && fileInput.click());
+        dropZoneSmall.addEventListener('dragover',  (e) => { e.preventDefault(); dropZoneSmall.classList.add('dragover'); });
+        dropZoneSmall.addEventListener('dragleave', ()  => dropZoneSmall.classList.remove('dragover'));
         dropZoneSmall.addEventListener('drop', (e) => {
             e.preventDefault(); dropZoneSmall.classList.remove('dragover');
             if (e.dataTransfer.files) handleFiles(e.dataTransfer.files);
         });
     }
 
-    // ページ全体へのドロップ
     document.addEventListener('dragover', (e) => e.preventDefault());
     document.addEventListener('drop', (e) => {
         e.preventDefault();
@@ -1357,15 +1626,21 @@ async function handleFiles(files) {
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
         if (!file.type.startsWith('audio/')) continue;
-        const meta = await readAudioTags(file);
+        const meta     = await readAudioTags(file);
         const newTrack = {
-            id: 'track_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-            fileBlob: file, fileName: file.name,
-            title: meta.title || file.name.replace(/\.[^/.]+$/, ''),
-            artist: meta.artist || '不明なアーティスト',
-            date: '', tags: [], thumbnailDataUrl: meta.picture || null,
-            addedAt: Date.now(), sortOrder: Date.now(),
-            updatedAt: Date.now(), deleted: false, driveFileId: null
+            id:               'track_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+            fileBlob:         file,
+            fileName:         file.name,
+            title:            meta.title  || file.name.replace(/\.[^/.]+$/, ''),
+            artist:           meta.artist || '不明なアーティスト',
+            date:             '',
+            tags:             [],
+            thumbnailDataUrl: meta.picture || null,
+            addedAt:          Date.now(),
+            sortOrder:        Date.now(),
+            updatedAt:        Date.now(),
+            deleted:          false,
+            driveFileId:      null
         };
         await saveTrackToDB(newTrack);
         added++;
@@ -1379,46 +1654,46 @@ async function handleFiles(files) {
 
 function saveTrackToDB(track) {
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(['tracks'], 'readwrite');
+        const tx  = db.transaction(['tracks'], 'readwrite');
         const req = tx.objectStore('tracks').put(track);
         req.onsuccess = () => resolve();
-        req.onerror = (e) => reject(e.target.error);
+        req.onerror   = (e) => reject(e.target.error);
     });
 }
 
 function deleteTrackFromDB(id) {
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(['tracks'], 'readwrite');
+        const tx  = db.transaction(['tracks'], 'readwrite');
         const req = tx.objectStore('tracks').delete(id);
         req.onsuccess = () => resolve();
-        req.onerror = (e) => reject(e.target.error);
+        req.onerror   = (e) => reject(e.target.error);
     });
 }
 
 function savePlaylistToDB(pl) {
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(['playlists'], 'readwrite');
+        const tx  = db.transaction(['playlists'], 'readwrite');
         const req = tx.objectStore('playlists').put(pl);
         req.onsuccess = () => resolve();
-        req.onerror = e => reject(e.target.error);
+        req.onerror   = e => reject(e.target.error);
     });
 }
 
 function getAllTracksFromDBRaw() {
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(['tracks'], 'readonly');
+        const tx  = db.transaction(['tracks'], 'readonly');
         const req = tx.objectStore('tracks').getAll();
         req.onsuccess = () => resolve(req.result);
-        req.onerror = (e) => reject(e.target.error);
+        req.onerror   = (e) => reject(e.target.error);
     });
 }
 
 function getAllPlaylistsFromDBRaw() {
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(['playlists'], 'readonly');
+        const tx  = db.transaction(['playlists'], 'readonly');
         const req = tx.objectStore('playlists').getAll();
         req.onsuccess = () => resolve(req.result);
-        req.onerror = (e) => reject(e.target.error);
+        req.onerror   = (e) => reject(e.target.error);
     });
 }
 
@@ -1438,6 +1713,7 @@ async function loadLibrary() {
             if (!appState.allKnownTags.has(tagObj.text)) appState.allKnownTags.set(tagObj.text, tagObj);
         });
     });
+
     updateTagsDatalist();
     updateMainQueue();
 }
@@ -1457,7 +1733,7 @@ async function saveManualOrder() {
     if (appState.currentPlaylistId) {
         const pl = appState.playlists.find(p => p.id === appState.currentPlaylistId);
         if (pl) {
-            pl.trackIds = appState.currentQueue.map(t => t.id);
+            pl.trackIds  = appState.currentQueue.map(t => t.id);
             pl.updatedAt = Date.now();
             await savePlaylistToDB(pl);
             autoSync();
@@ -1465,11 +1741,11 @@ async function saveManualOrder() {
     } else {
         if (!appState.searchQueryMain) {
             appState.tracks = [...appState.currentQueue];
-            const tx = db.transaction(['tracks'], 'readwrite');
+            const tx    = db.transaction(['tracks'], 'readwrite');
             const store = tx.objectStore('tracks');
             appState.tracks.forEach((t, i) => {
-                t.sortOrder = i;
-                t.updatedAt = Date.now();
+                t.sortOrder  = i;
+                t.updatedAt  = Date.now();
                 store.put(t);
             });
             tx.oncomplete = () => autoSync();
@@ -1487,7 +1763,9 @@ function renderMainTrackList() {
 
     const selectAllCb = document.getElementById('main-select-all');
     if (selectAllCb) {
-        selectAllCb.checked = appState.currentQueue.length > 0 && appState.selectedMainTracks.size === appState.currentQueue.length;
+        selectAllCb.checked =
+            appState.currentQueue.length > 0 &&
+            appState.selectedMainTracks.size === appState.currentQueue.length;
     }
     updateBulkActionBar();
 
@@ -1499,6 +1777,7 @@ function renderMainTrackList() {
         const isCurrentTrack = appState.currentTrackIndex === index;
         if (isCurrentTrack) li.classList.add(appState.isPlaying ? 'playing' : 'paused');
 
+        // ドラッグ&ドロップ（手動順のみ）
         if (appState.sortModeMain === 'manual') {
             li.draggable = true;
             li.addEventListener('dragstart', (e) => {
@@ -1506,10 +1785,10 @@ function renderMainTrackList() {
                 e.dataTransfer.effectAllowed = 'move';
                 setTimeout(() => li.style.opacity = '0.5', 0);
             });
-            li.addEventListener('dragend', () => { li.style.opacity = '1'; draggedItemIndex = null; });
+            li.addEventListener('dragend',  () => { li.style.opacity = '1'; draggedItemIndex = null; });
             li.addEventListener('dragover', (e) => {
                 e.preventDefault();
-                li.style.outline = '2px solid var(--accent)';
+                li.style.outline       = '2px solid var(--accent)';
                 li.style.outlineOffset = '-2px';
             });
             li.addEventListener('dragleave', () => { li.style.outline = ''; });
@@ -1519,9 +1798,12 @@ function renderMainTrackList() {
                 if (draggedItemIndex === null || draggedItemIndex === index) return;
                 const dragged = appState.currentQueue.splice(draggedItemIndex, 1)[0];
                 appState.currentQueue.splice(index, 0, dragged);
-                if (appState.currentTrackIndex === draggedItemIndex) appState.currentTrackIndex = index;
-                else if (appState.currentTrackIndex > draggedItemIndex && appState.currentTrackIndex <= index) appState.currentTrackIndex--;
-                else if (appState.currentTrackIndex < draggedItemIndex && appState.currentTrackIndex >= index) appState.currentTrackIndex++;
+                if (appState.currentTrackIndex === draggedItemIndex)
+                    appState.currentTrackIndex = index;
+                else if (appState.currentTrackIndex > draggedItemIndex && appState.currentTrackIndex <= index)
+                    appState.currentTrackIndex--;
+                else if (appState.currentTrackIndex < draggedItemIndex && appState.currentTrackIndex >= index)
+                    appState.currentTrackIndex++;
                 saveManualOrder();
                 renderMainTrackList();
             });
@@ -1529,13 +1811,13 @@ function renderMainTrackList() {
 
         // チェックボックス
         const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
+        checkbox.type      = 'checkbox';
         checkbox.className = 'custom-checkbox';
-        checkbox.checked = appState.selectedMainTracks.has(track.id);
-        checkbox.addEventListener('click', (e) => e.stopPropagation());
+        checkbox.checked   = appState.selectedMainTracks.has(track.id);
+        checkbox.addEventListener('click',  (e) => e.stopPropagation());
         checkbox.addEventListener('change', (e) => {
             if (e.target.checked) appState.selectedMainTracks.add(track.id);
-            else appState.selectedMainTracks.delete(track.id);
+            else                  appState.selectedMainTracks.delete(track.id);
             updateBulkActionBar();
         });
 
@@ -1553,6 +1835,7 @@ function renderMainTrackList() {
         // 曲情報
         const info = document.createElement('div');
         info.className = 'track-list-info';
+
         let tagsHtml = '';
         if (track.tags && track.tags.length > 0) {
             tagsHtml = '<div class="track-list-tags">' +
@@ -1561,6 +1844,7 @@ function renderMainTrackList() {
                     return `<span class="track-list-tag" style="border:1px solid ${tObj.color};background:${tObj.color}22;">${tObj.text}</span>`;
                 }).join('') + '</div>';
         }
+
         info.innerHTML = `
             <div class="track-list-title">${track.title}</div>
             <div class="track-list-sub">${track.artist || '-'}</div>
@@ -1573,13 +1857,13 @@ function renderMainTrackList() {
 
         const addBtn = document.createElement('button');
         addBtn.className = 'icon-btn sm';
-        addBtn.title = 'プレイリストに追加';
+        addBtn.title     = 'プレイリストに追加';
         addBtn.innerHTML = '<span class="material-symbols-rounded">playlist_add</span>';
         addBtn.addEventListener('click', (e) => { e.stopPropagation(); openAddToPlaylistModal([track.id]); });
 
         const editBtn = document.createElement('button');
         editBtn.className = 'icon-btn sm';
-        editBtn.title = '情報を編集';
+        editBtn.title     = '情報を編集';
         editBtn.innerHTML = '<span class="material-symbols-rounded">edit</span>';
         editBtn.addEventListener('click', (e) => { e.stopPropagation(); openEditModal([track.id]); });
 
@@ -1589,15 +1873,18 @@ function renderMainTrackList() {
         if (appState.currentPlaylistId) {
             const removeBtn = document.createElement('button');
             removeBtn.className = 'icon-btn sm';
-            removeBtn.title = 'このリストから外す';
+            removeBtn.title     = 'このリストから外す';
             removeBtn.innerHTML = '<span class="material-symbols-rounded">playlist_remove</span>';
-            removeBtn.addEventListener('click', (e) => { e.stopPropagation(); removeTracksFromPlaylist(appState.currentPlaylistId, [track.id]); });
+            removeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                removeTracksFromPlaylist(appState.currentPlaylistId, [track.id]);
+            });
             actions.appendChild(removeBtn);
         }
 
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'icon-btn sm';
-        deleteBtn.title = '完全削除';
+        deleteBtn.title     = '完全削除';
         deleteBtn.innerHTML = '<span class="material-symbols-rounded" style="color:var(--danger)">delete_forever</span>';
         deleteBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteTracksCompletely([track.id]); });
         actions.appendChild(deleteBtn);
@@ -1607,7 +1894,7 @@ function renderMainTrackList() {
         li.appendChild(info);
         li.appendChild(actions);
 
-        info.addEventListener('click', () => playTrack(index));
+        info.addEventListener('click',  () => playTrack(index));
         thumb.addEventListener('click', () => playTrack(index));
 
         container.appendChild(li);
@@ -1615,25 +1902,26 @@ function renderMainTrackList() {
 }
 
 function updateBulkActionBar() {
-    const bar = document.getElementById('bulk-actions-bar');
+    const bar       = document.getElementById('bulk-actions-bar');
     const countSpan = document.getElementById('bulk-count');
-    const count = appState.selectedMainTracks.size;
-    if (bar) bar.classList.toggle('visible', count > 0);
+    const count     = appState.selectedMainTracks.size;
+    if (bar)       bar.classList.toggle('visible', count > 0);
     if (countSpan) countSpan.textContent = `${count}曲を選択中`;
     const btnRemove = document.getElementById('bulk-remove-playlist-btn');
     if (btnRemove) btnRemove.style.display = appState.currentPlaylistId ? 'inline-flex' : 'none';
 }
 
 function initBulkActions() {
-    const bulkAddBtn = document.getElementById('bulk-add-playlist-btn');
-    const bulkEditBtn = document.getElementById('bulk-edit-btn');
+    const bulkAddBtn    = document.getElementById('bulk-add-playlist-btn');
+    const bulkEditBtn   = document.getElementById('bulk-edit-btn');
     const bulkRemoveBtn = document.getElementById('bulk-remove-playlist-btn');
     const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
 
-    if (bulkAddBtn) bulkAddBtn.addEventListener('click', () => openAddToPlaylistModal(Array.from(appState.selectedMainTracks)));
-    if (bulkEditBtn) bulkEditBtn.addEventListener('click', () => openEditModal(Array.from(appState.selectedMainTracks)));
+    if (bulkAddBtn)    bulkAddBtn.addEventListener('click',    () => openAddToPlaylistModal(Array.from(appState.selectedMainTracks)));
+    if (bulkEditBtn)   bulkEditBtn.addEventListener('click',   () => openEditModal(Array.from(appState.selectedMainTracks)));
     if (bulkRemoveBtn) bulkRemoveBtn.addEventListener('click', () => {
-        if (appState.currentPlaylistId) removeTracksFromPlaylist(appState.currentPlaylistId, Array.from(appState.selectedMainTracks));
+        if (appState.currentPlaylistId)
+            removeTracksFromPlaylist(appState.currentPlaylistId, Array.from(appState.selectedMainTracks));
     });
     if (bulkDeleteBtn) bulkDeleteBtn.addEventListener('click', () => deleteTracksCompletely(Array.from(appState.selectedMainTracks)));
 }
@@ -1653,7 +1941,7 @@ async function deleteTracksCompletely(trackIds) {
     for (let id of trackIds) {
         const track = tracks.find(t => t.id === id);
         if (track) {
-            track.deleted = true;
+            track.deleted   = true;
             track.updatedAt = Date.now();
             delete track.fileBlob;
             await saveTrackToDB(track);
@@ -1676,11 +1964,11 @@ function initPlaylists() {
             const name = prompt('新しいプレイリストの名前を入力してください');
             if (!name || !name.trim()) return;
             const newList = {
-                id: 'pl_' + Date.now(),
-                name: name.trim(),
-                trackIds: [],
+                id:        'pl_' + Date.now(),
+                name:      name.trim(),
+                trackIds:  [],
                 updatedAt: Date.now(),
-                deleted: false
+                deleted:   false
             };
             await savePlaylistToDB(newList);
             await loadPlaylists();
@@ -1697,7 +1985,6 @@ async function loadPlaylists() {
     const tabsContainer = document.getElementById('playlist-tabs');
     if (!tabsContainer) return;
 
-    // 既存のプレイリストタブを削除（すべてタブは残す）
     const existingTabs = tabsContainer.querySelectorAll('.playlist-tab:not(#library-all-btn)');
     existingTabs.forEach(t => t.remove());
 
@@ -1705,7 +1992,7 @@ async function loadPlaylists() {
         const tab = document.createElement('button');
         tab.className = 'playlist-tab' + (appState.currentPlaylistId === pl.id ? ' active' : '');
         tab.dataset.id = pl.id;
-        tab.innerHTML = `
+        tab.innerHTML  = `
             <span class="material-symbols-rounded">queue_music</span>
             <span>${pl.name}</span>
             <button class="tab-del" title="削除">
@@ -1736,16 +2023,20 @@ function openAddToPlaylistModal(trackIdsArray) {
     }
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
-    let listHtml = appState.playlists.map(pl =>
+    const listHtml = appState.playlists.map(pl =>
         `<div class="modal-playlist-item" data-id="${pl.id}">
             <span class="material-symbols-rounded">queue_music</span>${pl.name}
-         </div>`
+        </div>`
     ).join('');
     modal.innerHTML = `
         <div class="edit-modal-content" style="max-width:360px;">
             <div class="edit-modal-header">
-                <h2 class="edit-modal-title">プレイリストに追加 <span style="font-size:12px;font-weight:400;color:var(--text-secondary);">${trackIdsArray.length}曲</span></h2>
-                <button class="icon-btn" id="close-pl-modal"><span class="material-symbols-rounded">close</span></button>
+                <h2 class="edit-modal-title">プレイリストに追加
+                    <span style="font-size:12px;font-weight:400;color:var(--text-secondary);">${trackIdsArray.length}曲</span>
+                </h2>
+                <button class="icon-btn" id="close-pl-modal">
+                    <span class="material-symbols-rounded">close</span>
+                </button>
             </div>
             <div style="padding:8px 16px 16px;max-height:280px;overflow-y:auto;">${listHtml}</div>
         </div>
@@ -1771,7 +2062,10 @@ async function addTracksToPlaylist(playlistId, trackIdsArray) {
     trackIdsArray.forEach(id => {
         if (!pl.trackIds.includes(id)) { pl.trackIds.push(id); addedCount++; }
     });
-    if (addedCount === 0) { showToast('すでにすべての曲がリストに追加されています', 'warning'); return; }
+    if (addedCount === 0) {
+        showToast('すでにすべての曲がリストに追加されています', 'warning');
+        return;
+    }
     pl.updatedAt = Date.now();
     await savePlaylistToDB(pl);
     appState.selectedMainTracks.clear();
@@ -1785,7 +2079,7 @@ async function removeTracksFromPlaylist(playlistId, trackIdsArray) {
     if (!confirm(`${trackIdsArray.length}曲をプレイリストから外しますか？`)) return;
     const pl = appState.playlists.find(p => p.id === playlistId);
     if (!pl) return;
-    pl.trackIds = pl.trackIds.filter(id => !trackIdsArray.includes(id));
+    pl.trackIds  = pl.trackIds.filter(id => !trackIdsArray.includes(id));
     pl.updatedAt = Date.now();
     await savePlaylistToDB(pl);
     appState.selectedMainTracks.clear();
@@ -1815,7 +2109,7 @@ async function deletePlaylist(playlistId, playlistName) {
 // 編集ページ（カードグリッド）
 // ─────────────────────────────────────────────
 function renderEditLibraryList() {
-    const grid = document.getElementById('edit-library-list');
+    const grid    = document.getElementById('edit-library-list');
     const emptyEl = document.getElementById('edit-empty');
     if (!grid) return;
     grid.innerHTML = '';
@@ -1851,12 +2145,12 @@ function renderEditLibraryList() {
                 }).join('') + '</div>';
         }
 
-        card.innerHTML = `
+        card.appendChild(art);
+        card.innerHTML += `
             <div class="edit-card-title">${track.title}</div>
             <div class="edit-card-artist">${track.artist || '-'}</div>
             ${tagsHtml}
         `;
-        card.insertBefore(art, card.firstChild);
 
         card.addEventListener('click', () => openEditModal([track.id]));
         grid.appendChild(card);
@@ -1866,32 +2160,35 @@ function renderEditLibraryList() {
 // ─────────────────────────────────────────────
 // 編集モーダル
 // ─────────────────────────────────────────────
-let editingTags = [];
+let editingTags        = [];
 let currentEditTrackIds = [];
 
 function initEditPage() {
-    const modal = document.getElementById('edit-modal');
-    const closeBtn = document.getElementById('close-edit-modal');
-    const cancelBtn = document.getElementById('close-edit-modal-cancel');
-    const saveBtn = document.getElementById('save-metadata-btn');
-    const thumbnailBtn = document.getElementById('edit-thumbnail-btn');
+    const modal          = document.getElementById('edit-modal');
+    const closeBtn       = document.getElementById('close-edit-modal');
+    const cancelBtn      = document.getElementById('close-edit-modal-cancel');
+    const saveBtn        = document.getElementById('save-metadata-btn');
+    const thumbnailBtn   = document.getElementById('edit-thumbnail-btn');
     const thumbnailInput = document.getElementById('edit-thumbnail-input');
     const thumbnailRemoveBtn = document.getElementById('edit-thumbnail-remove-btn');
-    const thumbnailPreview = document.getElementById('edit-thumbnail-preview');
-    const tagInput = document.getElementById('edit-tags-input');
+    const thumbnailPreview   = document.getElementById('edit-thumbnail-preview');
+    const tagInput           = document.getElementById('edit-tags-input');
 
-    if (closeBtn) closeBtn.addEventListener('click', closeEditModal);
+    if (closeBtn)  closeBtn.addEventListener('click',  closeEditModal);
     if (cancelBtn) cancelBtn.addEventListener('click', closeEditModal);
-    if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) closeEditModal(); });
+    if (modal)     modal.addEventListener('click', (e) => { if (e.target === modal) closeEditModal(); });
 
-    // サムネイル変更
-    if (thumbnailBtn) thumbnailBtn.addEventListener('click', () => thumbnailInput && thumbnailInput.click());
+    if (thumbnailBtn)    thumbnailBtn.addEventListener('click',    () => thumbnailInput && thumbnailInput.click());
     if (thumbnailPreview) thumbnailPreview.addEventListener('click', () => thumbnailInput && thumbnailInput.click());
 
-    // サムネイルドラッグ&ドロップ
     if (thumbnailPreview) {
-        thumbnailPreview.addEventListener('dragover', (e) => { e.preventDefault(); thumbnailPreview.style.borderColor = 'var(--accent)'; });
-        thumbnailPreview.addEventListener('dragleave', () => thumbnailPreview.style.borderColor = '');
+        thumbnailPreview.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            thumbnailPreview.style.borderColor = 'var(--accent)';
+        });
+        thumbnailPreview.addEventListener('dragleave', () => {
+            thumbnailPreview.style.borderColor = '';
+        });
         thumbnailPreview.addEventListener('drop', (e) => {
             e.preventDefault();
             thumbnailPreview.style.borderColor = '';
@@ -1908,12 +2205,11 @@ function initEditPage() {
         const preview = document.getElementById('edit-thumbnail-preview');
         if (preview) {
             preview.style.backgroundImage = 'none';
-            preview.innerHTML = '<span class="material-symbols-rounded">image</span>';
+            preview.innerHTML  = '<span class="material-symbols-rounded">image</span>';
             preview.dataset.url = '';
         }
     });
 
-    // タグ入力
     if (tagInput) {
         tagInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
@@ -1921,7 +2217,7 @@ function initEditPage() {
                 const tagText = tagInput.value.trim();
                 if (tagText && !editingTags.find(t => t.text === tagText)) {
                     const existing = appState.allKnownTags.get(tagText);
-                    const color = existing ? existing.color : getTagColorHex(tagText);
+                    const color    = existing ? existing.color : getTagColorHex(tagText);
                     editingTags.push({ text: tagText, color });
                     renderModalTags();
                     tagInput.value = '';
@@ -1939,7 +2235,7 @@ function loadThumbnailFromFile(file) {
         const preview = document.getElementById('edit-thumbnail-preview');
         if (preview) {
             preview.style.backgroundImage = `url(${e.target.result})`;
-            preview.innerHTML = '';
+            preview.innerHTML   = '';
             preview.dataset.url = e.target.result;
         }
     };
@@ -1951,39 +2247,45 @@ function openEditModal(trackIds) {
     const modal = document.getElementById('edit-modal');
     if (!modal) return;
 
-    const isBulk = trackIds.length > 1;
-    const infoEl = document.getElementById('edit-modal-info');
-    if (infoEl) infoEl.textContent = isBulk ? `${trackIds.length}曲を一括編集` : '';
-
+    const isBulk  = trackIds.length > 1;
+    const infoEl  = document.getElementById('edit-modal-info');
     const titleEl = document.getElementById('edit-modal-title');
+
+    if (infoEl)  infoEl.textContent  = isBulk ? `${trackIds.length}曲を一括編集` : '';
     if (titleEl) titleEl.textContent = isBulk ? `${trackIds.length}曲を一括編集` : '情報を編集';
 
-    const titleInput = document.getElementById('edit-title');
+    const titleInput  = document.getElementById('edit-title');
     const artistInput = document.getElementById('edit-artist');
-    const dateInput = document.getElementById('edit-date');
-    const preview = document.getElementById('edit-thumbnail-preview');
+    const dateInput   = document.getElementById('edit-date');
+    const preview     = document.getElementById('edit-thumbnail-preview');
 
     if (isBulk) {
-        if (titleInput) { titleInput.value = '（複数選択中 - 変更不可）'; titleInput.disabled = true; }
+        if (titleInput)  { titleInput.value = '（複数選択中 - 変更不可）'; titleInput.disabled = true; }
         if (artistInput) artistInput.value = '';
-        if (dateInput) dateInput.value = '';
+        if (dateInput)   dateInput.value   = '';
         editingTags = [];
-        if (preview) { preview.style.backgroundImage = 'none'; preview.innerHTML = '<span class="material-symbols-rounded">library_music</span>'; preview.dataset.url = ''; }
+        if (preview) {
+            preview.style.backgroundImage = 'none';
+            preview.innerHTML   = '<span class="material-symbols-rounded">library_music</span>';
+            preview.dataset.url = '';
+        }
     } else {
         const track = appState.tracks.find(t => t.id === trackIds[0]);
         if (!track) return;
-        if (titleInput) { titleInput.value = track.title || ''; titleInput.disabled = false; }
-        if (artistInput) artistInput.value = track.artist || '';
-        if (dateInput) dateInput.value = track.date || '';
-        editingTags = (track.tags || []).map(t => typeof t === 'string' ? { text: t, color: getTagColorHex(t) } : t);
+        if (titleInput)  { titleInput.value = track.title  || ''; titleInput.disabled = false; }
+        if (artistInput) artistInput.value  = track.artist || '';
+        if (dateInput)   dateInput.value    = track.date   || '';
+        editingTags = (track.tags || []).map(t =>
+            typeof t === 'string' ? { text: t, color: getTagColorHex(t) } : t
+        );
         if (preview) {
             if (track.thumbnailDataUrl) {
                 preview.style.backgroundImage = `url(${track.thumbnailDataUrl})`;
-                preview.innerHTML = '';
+                preview.innerHTML   = '';
                 preview.dataset.url = track.thumbnailDataUrl;
             } else {
                 preview.style.backgroundImage = 'none';
-                preview.innerHTML = '<span class="material-symbols-rounded">image</span>';
+                preview.innerHTML   = '<span class="material-symbols-rounded">image</span>';
                 preview.dataset.url = '';
             }
         }
@@ -1992,8 +2294,6 @@ function openEditModal(trackIds) {
     renderModalTags();
     modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
-
-    // 編集ページから呼ばれた場合はプレイヤーへ戻らない
 }
 
 function closeEditModal() {
@@ -2011,7 +2311,7 @@ function renderModalTags() {
     editingTags.forEach((tagObj, index) => {
         const span = document.createElement('span');
         span.className = 'tag-item';
-        span.style.border = `1px solid ${tagObj.color}`;
+        span.style.border          = `1px solid ${tagObj.color}`;
         span.style.backgroundColor = `${tagObj.color}33`;
         span.innerHTML = `
             <span class="tag-text-content" style="cursor:pointer;">${tagObj.text}</span>
@@ -2030,23 +2330,26 @@ function renderModalTags() {
 
 function openTagEditModal(index) {
     const tagObj = editingTags[index];
-    const modal = document.createElement('div');
+    const modal  = document.createElement('div');
     modal.className = 'modal-overlay';
     modal.style.zIndex = '600';
     modal.innerHTML = `
         <div class="edit-modal-content" style="max-width:320px;">
             <div class="edit-modal-header">
                 <h2 class="edit-modal-title">タグを編集</h2>
-                <button class="icon-btn" id="tag-modal-cancel-x"><span class="material-symbols-rounded">close</span></button>
+                <button class="icon-btn" id="tag-modal-cancel-x">
+                    <span class="material-symbols-rounded">close</span>
+                </button>
             </div>
-            <div style="padding:16px 24px;display:flex;flex-direction:column;gap:14px;">
+            <div style="padding:16px 20px;display:flex;flex-direction:column;gap:14px;">
                 <div class="form-field">
                     <label class="form-label">タグ名</label>
                     <input type="text" id="modal-tag-name" class="form-input" value="${tagObj.text}">
                 </div>
                 <div class="form-field">
                     <label class="form-label">色</label>
-                    <input type="color" id="modal-tag-color" value="${tagObj.color}" style="width:100%;height:36px;border:1px solid var(--border);border-radius:8px;padding:2px 4px;cursor:pointer;">
+                    <input type="color" id="modal-tag-color" value="${tagObj.color}"
+                        style="width:100%;height:38px;border:1px solid var(--border);border-radius:8px;padding:2px 4px;cursor:pointer;">
                 </div>
             </div>
             <div class="edit-modal-footer">
@@ -2059,11 +2362,11 @@ function openTagEditModal(index) {
         </div>
     `;
     document.body.appendChild(modal);
-    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    modal.addEventListener('click',    (e) => { if (e.target === modal) modal.remove(); });
     modal.querySelector('#tag-modal-cancel-x').addEventListener('click', () => modal.remove());
-    modal.querySelector('#tag-modal-cancel').addEventListener('click', () => modal.remove());
+    modal.querySelector('#tag-modal-cancel').addEventListener('click',   () => modal.remove());
     modal.querySelector('#tag-modal-save').addEventListener('click', () => {
-        const newText = modal.querySelector('#modal-tag-name').value.trim();
+        const newText  = modal.querySelector('#modal-tag-name').value.trim();
         const newColor = modal.querySelector('#modal-tag-color').value;
         if (newText) { editingTags[index] = { text: newText, color: newColor }; renderModalTags(); }
         modal.remove();
@@ -2072,10 +2375,10 @@ function openTagEditModal(index) {
 
 async function saveMetadata() {
     if (currentEditTrackIds.length === 0) return;
-    const isBulk = currentEditTrackIds.length > 1;
-    const newArtist = document.getElementById('edit-artist').value.trim();
-    const newDate = document.getElementById('edit-date').value;
-    const preview = document.getElementById('edit-thumbnail-preview');
+    const isBulk      = currentEditTrackIds.length > 1;
+    const newArtist   = document.getElementById('edit-artist').value.trim();
+    const newDate     = document.getElementById('edit-date').value;
+    const preview     = document.getElementById('edit-thumbnail-preview');
     const newThumbnail = preview ? preview.dataset.url : null;
 
     const tracksToUpdate = [];
@@ -2083,17 +2386,19 @@ async function saveMetadata() {
         const track = appState.tracks.find(t => t.id === id);
         if (track) {
             if (!isBulk) {
-                track.title = document.getElementById('edit-title').value;
+                track.title  = document.getElementById('edit-title').value;
                 track.artist = newArtist;
-                track.date = newDate;
-                track.tags = [...editingTags];
+                track.date   = newDate;
+                track.tags   = [...editingTags];
                 if (newThumbnail !== undefined) track.thumbnailDataUrl = newThumbnail || null;
             } else {
                 if (newArtist) track.artist = newArtist;
-                if (newDate) track.date = newDate;
+                if (newDate)   track.date   = newDate;
                 let combinedTags = [...(track.tags || [])];
                 editingTags.forEach(newTag => {
-                    const exists = combinedTags.find(t => (typeof t === 'string' ? t : t.text) === newTag.text);
+                    const exists = combinedTags.find(t =>
+                        (typeof t === 'string' ? t : t.text) === newTag.text
+                    );
                     if (!exists) combinedTags.push(newTag);
                 });
                 track.tags = combinedTags;
@@ -2112,7 +2417,7 @@ async function saveMetadata() {
     autoSync();
 }
 
-// 編集ページからの呼び出し（bulk edit from player page）
+// 編集ページから呼び出し用（互換性維持）
 function openEditModal_fromPlayer(trackIds) {
     openEditModal(trackIds);
 }
@@ -2129,7 +2434,8 @@ function formatTime(seconds) {
 
 function getTagColorHex(str) {
     let hash = 0;
-    for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    for (let i = 0; i < str.length; i++)
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
     const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
     return '#' + '000000'.substring(0, 6 - c.length) + c;
 }
