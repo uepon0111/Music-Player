@@ -3,7 +3,7 @@
  */
 
 // ★ 取得したクライアントIDを以下に必ず貼り付けてください
-const GOOGLE_CLIENT_ID = 'ここに取得したクライアントIDを貼り付けます';
+const GOOGLE_CLIENT_ID = '966636096862-8hrrm5heb4g5r469veoels7u6ifjguuk.apps.googleusercontent.com';
 const SYNC_FOLDER_NAME = 'WebMusicPlayer_Sync'; // Drive内に作成されるフォルダ名
 
 const DB_NAME = 'MusicPlayerDB';
