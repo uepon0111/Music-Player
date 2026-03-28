@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -104,7 +105,7 @@
                                     <label for="main-select-all" style="font-size: 14px; cursor: pointer; color: var(--text-secondary);">すべて選択</label>
                                 </div>
                                 <select id="main-sort-select" class="control-select">
-                                    <option value="manual">手瞿 (デフォルト)</option>
+                                    <option value="manual">手動 (デフォルト)</option>
                                     <option value="date_desc">追加日が新しい順</option>
                                     <option value="date_asc">追加日が古い順</option>
                                     <option value="name_asc">タイトル順 (昇順)</option>
@@ -194,29 +195,47 @@
 
         <section id="log" class="page-section">
             <div class="log-container">
-                <div class="log-header">
+                <div class="log-header" style="flex-wrap: wrap; gap: 16px;">
                     <h2>再生ログと統計</h2>
+                    
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                        <select id="log-period-select" class="control-select">
+                            <option value="all">全期間</option>
+                            <option value="year">過去1年 (月ごと)</option>
+                            <option value="month">過去1ヶ月 (日ごと)</option>
+                            <option value="week">過去1週間 (日ごと)</option>
+                            <option value="day">過去24時間 (時間ごと)</option>
+                        </select>
+                        <select id="log-category-select" class="control-select">
+                            <option value="total">総合推移 (折れ線グラフ)</option>
+                            <option value="artist">アーティスト別</option>
+                            <option value="tag">タグ別</option>
+                            <option value="decade">年代別</option>
+                        </select>
+                    </div>
                 </div>
+                
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <h3>総再生回数</h3>
+                        <h3>総再生時間</h3>
+                        <p id="stat-total-time">0 分</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>再生セッション数</h3>
                         <p id="stat-total-plays">0 回</p>
                     </div>
                     <div class="stat-card">
-                        <h3>総再生時間</h3>
-                        <p id="stat-total-time">0 時間</p>
-                    </div>
-                    <div class="stat-card">
                         <h3>最も聴いた曲</h3>
-                        <p id="stat-top-track">-</p>
+                        <p id="stat-top-track" style="font-size: 14px;">-</p>
                     </div>
                     <div class="stat-card">
                         <h3>登録曲数</h3>
                         <p id="stat-total-tracks">0 曲</p>
                     </div>
                 </div>
-                <div class="chart-wrapper">
-                    <p style="text-align: center; color: var(--text-secondary); line-height: 360px;">（※ここに将来的にグラフが表示されます）</p>
+                
+                <div class="chart-wrapper" style="position: relative; height: 400px; padding: 10px;">
+                    <canvas id="logChart"></canvas>
                 </div>
             </div>
         </section>
