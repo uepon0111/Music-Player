@@ -7,7 +7,7 @@ const GOOGLE_CLIENT_ID = '966636096862-8hrrm5heb4g5r469veoels7u6ifjguuk.apps.goo
 const SYNC_FOLDER_NAME = 'WebMusicPlayer_Sync'; 
 
 const DB_NAME = 'MusicPlayerDB';
-const DB_VERSION = 3; 
+const DB_VERSION = 4; // DBバージョンを上げて logs ストアを確実に作成します
 let db = null;
 
 const audioPlayer = new Audio();
@@ -15,6 +15,10 @@ let currentObjectUrl = null;
 
 let tokenClient = null;
 let gapiAccessToken = null;
+
+// ★ログ・再生時間記録用
+let playbackStartTime = 0;
+let logChartInstance = null;
 
 const appState = {
     tracks: [],
@@ -36,7 +40,7 @@ const appState = {
     isLoggedIn: false,
     user: null,
     isSyncing: false,
-    isStreaming: false // ★ ストリーミング設定
+    isStreaming: false 
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -49,7 +53,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     initBulkActions();
     initEditPage();      
     initPlaylistPlaybackControls(); 
-    initSettings(); // ★ 設定画面初期化
+    initSettings(); 
+    initLogControls(); // ★ログ画面のコントロール初期化
     
     try {
         await initDB();
@@ -58,6 +63,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
         console.error('DB初期化エラー:', error);
     }
+    
+    // ページを閉じる際に計測中の時間を保存
+    window.addEventListener('beforeunload', stopPlaybackTracking);
 });
 
 function initNavigation() {
@@ -78,6 +86,7 @@ function initNavigation() {
             updateBulkActionBar();
             
             if(targetId === 'edit') renderEditLibraryList();
+            if(targetId === 'log') updateLogPage(); // ★ログページを開いた時に更新
         });
     });
 }
@@ -95,7 +104,6 @@ function initSettings() {
             appState.isStreaming = e.target.checked;
             localStorage.setItem('isStreaming', appState.isStreaming);
             
-            // ストリーミングからキャッシュモードに戻した場合、不足しているBlobをDLするために同期を走らせる
             if (!appState.isStreaming && appState.isLoggedIn) {
                 autoSync();
             }
@@ -104,7 +112,215 @@ function initSettings() {
 }
 
 // ----------------------------------------------------
-// Google ログイン & Drive連携機能 (自動同期)
+// ログ・再生時間記録機能 (★新規追加)
+// ----------------------------------------------------
+function startPlaybackTracking() {
+    if (appState.currentTrackIndex >= 0 && appState.isPlaying) {
+        playbackStartTime = Date.now();
+    }
+}
+
+function stopPlaybackTracking() {
+    if (playbackStartTime > 0 && appState.currentTrackIndex >= 0) {
+        const elapsedSeconds = (Date.now() - playbackStartTime) / 1000;
+        
+        // 2秒以上再生した場合のみ記録する (誤操作スキップを除外)
+        if (elapsedSeconds > 2) {
+            const track = appState.currentQueue[appState.currentTrackIndex];
+            if (track) {
+                const logEntry = {
+                    trackId: track.id,
+                    title: track.title,
+                    artist: track.artist || "不明",
+                    tags: track.tags || [],
+                    date: track.date || "",
+                    duration: elapsedSeconds,
+                    timestamp: Date.now()
+                };
+                saveLogToDB(logEntry);
+            }
+        }
+        playbackStartTime = 0;
+    }
+}
+
+function saveLogToDB(logEntry) {
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(['logs'], 'readwrite');
+        const req = tx.objectStore('logs').add(logEntry);
+        req.onsuccess = () => resolve();
+        req.onerror = e => reject(e.target.error);
+    });
+}
+
+function getAllLogsFromDB() {
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(['logs'], 'readonly');
+        const req = tx.objectStore('logs').getAll();
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = e => reject(e.target.error);
+    });
+}
+
+function initLogControls() {
+    document.getElementById('log-period-select').addEventListener('change', updateLogPage);
+    document.getElementById('log-category-select').addEventListener('change', updateLogPage);
+}
+
+async function updateLogPage() {
+    const logs = await getAllLogsFromDB();
+    const period = document.getElementById('log-period-select').value;
+    const category = document.getElementById('log-category-select').value;
+    
+    // 基本統計の更新
+    const totalTracks = appState.tracks.length;
+    const totalPlays = logs.length;
+    const totalSeconds = logs.reduce((sum, log) => sum + log.duration, 0);
+    
+    document.getElementById('stat-total-tracks').textContent = `${totalTracks} 曲`;
+    document.getElementById('stat-total-plays').textContent = `${totalPlays} 回`;
+    document.getElementById('stat-total-time').textContent = formatLogTime(totalSeconds);
+    
+    // 最も聴いた曲 (全期間で算出)
+    const trackPlayTimes = {};
+    logs.forEach(log => {
+        trackPlayTimes[log.trackId] = (trackPlayTimes[log.trackId] || 0) + log.duration;
+    });
+    let topTrackId = null;
+    let maxTime = 0;
+    for (const [id, time] of Object.entries(trackPlayTimes)) {
+        if (time > maxTime) { maxTime = time; topTrackId = id; }
+    }
+    let topTrackName = "-";
+    if (topTrackId) {
+        const t = appState.tracks.find(x => x.id === topTrackId);
+        topTrackName = t ? t.title : "不明な曲";
+    }
+    document.getElementById('stat-top-track').textContent = topTrackName;
+
+    // グラフの描画
+    renderLogChart(logs, period, category);
+}
+
+function formatLogTime(seconds) {
+    if (seconds < 60) return `${Math.floor(seconds)} 秒`;
+    const m = Math.floor(seconds / 60);
+    if (m < 60) return `${m} 分`;
+    const h = Math.floor(m / 60);
+    const remM = m % 60;
+    return `${h} 時間 ${remM} 分`;
+}
+
+function renderLogChart(allLogs, period, category) {
+    const ctx = document.getElementById('logChart').getContext('2d');
+    if (logChartInstance) {
+        logChartInstance.destroy();
+    }
+
+    const now = Date.now();
+    let filteredLogs = allLogs;
+
+    // 期間でフィルタリング
+    if (period === 'day') filteredLogs = allLogs.filter(l => now - l.timestamp <= 86400000);
+    else if (period === 'week') filteredLogs = allLogs.filter(l => now - l.timestamp <= 7 * 86400000);
+    else if (period === 'month') filteredLogs = allLogs.filter(l => now - l.timestamp <= 30 * 86400000);
+    else if (period === 'year') filteredLogs = allLogs.filter(l => now - l.timestamp <= 365 * 86400000);
+
+    let labels = [];
+    let data = [];
+    let chartType = 'bar';
+    let xAxisLabel = '';
+
+    if (category === 'total') {
+        chartType = 'line';
+        xAxisLabel = '期間';
+        
+        const grouped = {};
+        const orderMap = {};
+        
+        filteredLogs.forEach(l => {
+            const d = new Date(l.timestamp);
+            let key;
+            if (period === 'day') key = `${d.getHours()}時`;
+            else if (period === 'week' || period === 'month') key = `${d.getMonth()+1}/${d.getDate()}`;
+            else key = `${d.getFullYear()}年${d.getMonth()+1}月`;
+            
+            grouped[key] = (grouped[key] || 0) + l.duration;
+            if (!orderMap[key] || l.timestamp < orderMap[key]) orderMap[key] = l.timestamp; // 時系列順を保つため
+        });
+
+        // 発生時刻の古い順にソート
+        const sortedKeys = Object.keys(grouped).sort((a,b) => orderMap[a] - orderMap[b]);
+        labels = sortedKeys;
+        data = sortedKeys.map(k => (grouped[k] / 60).toFixed(1)); // 分単位
+
+    } else {
+        // カテゴリ別 (Bar chart)
+        chartType = 'bar';
+        const grouped = {};
+        
+        filteredLogs.forEach(l => {
+            if (category === 'artist') {
+                const key = l.artist || '不明';
+                grouped[key] = (grouped[key] || 0) + l.duration;
+            } else if (category === 'tag') {
+                if (l.tags && l.tags.length > 0) {
+                    l.tags.forEach(t => {
+                        const text = typeof t === 'string' ? t : t.text;
+                        grouped[text] = (grouped[text] || 0) + l.duration;
+                    });
+                } else {
+                    grouped['タグなし'] = (grouped['タグなし'] || 0) + l.duration;
+                }
+            } else if (category === 'decade') {
+                let yearStr = (l.date || "").match(/\d{4}/);
+                let key = '不明';
+                if (yearStr) {
+                    const year = parseInt(yearStr[0]);
+                    key = `${Math.floor(year / 10) * 10}年代`;
+                }
+                grouped[key] = (grouped[key] || 0) + l.duration;
+            }
+        });
+
+        // 再生時間が多い順にソートして上位20件を取得
+        const sorted = Object.entries(grouped).sort((a,b) => b[1] - a[1]).slice(0, 20);
+        labels = sorted.map(x => x[0]);
+        data = sorted.map(x => (x[1] / 60).toFixed(1)); // 分単位
+        
+        xAxisLabel = category === 'artist' ? 'アーティスト' : category === 'tag' ? 'タグ' : '年代';
+    }
+
+    logChartInstance = new Chart(ctx, {
+        type: chartType,
+        data: {
+            labels: labels.length > 0 ? labels : ['データなし'],
+            datasets: [{
+                label: '再生時間 (分)',
+                data: data.length > 0 ? data : [0],
+                backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                borderColor: 'rgba(59, 130, 246, 1)',
+                borderWidth: 1,
+                fill: chartType === 'line'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true, title: { display: true, text: '再生時間 (分)' } },
+                x: { title: { display: true, text: xAxisLabel } }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+}
+
+
+// ----------------------------------------------------
+// Google ログイン & Drive連携機能
 // ----------------------------------------------------
 function initAuthUI() {
     const btnLogin = document.getElementById('btn-login');
@@ -186,7 +402,6 @@ function autoSync() {
     }
 }
 
-// === 新しい Drive自動同期処理 (Last-Write-Wins マージ) ===
 async function performDriveSync() {
     if (!gapiAccessToken) return;
     
@@ -197,7 +412,6 @@ async function performDriveSync() {
     try {
         const folderId = await getOrCreateSyncFolder();
         
-        // 1. リモートデータの取得
         const existingJsonId = await findDriveFile('library_sync.json', 'application/json', folderId);
         let remoteData = null;
         if (existingJsonId) {
@@ -212,18 +426,15 @@ async function performDriveSync() {
         const remoteTracks = remoteData ? remoteData.tracks || [] : [];
         const remotePlaylists = remoteData ? remoteData.playlists || [] : [];
         
-        // ローカルデータの取得（削除フラグが付いたものも含めて全て取得）
         const localTracks = await getAllTracksFromDBRaw(); 
         const localPlaylists = await getAllPlaylistsFromDBRaw();
 
         const localTrackMap = new Map(localTracks.map(t => [t.id, t]));
         const localPlaylistMap = new Map(localPlaylists.map(p => [p.id, p]));
 
-        // 2. Tracks のマージ
         for (let rTrack of remoteTracks) {
             let lTrack = localTrackMap.get(rTrack.id);
             if (!lTrack) {
-                // ローカルに存在しない（他端末で新規追加された）
                 if (!rTrack.deleted && !appState.isStreaming && rTrack.driveFileId) {
                     const blob = await downloadFileFromDrive(rTrack.driveFileId, syncStatus, rTrack.title);
                     if (blob) rTrack.fileBlob = blob;
@@ -231,12 +442,10 @@ async function performDriveSync() {
                 await saveTrackToDB(rTrack);
                 localTrackMap.set(rTrack.id, rTrack);
             } else {
-                // 両方に存在する場合、updatedAt を比較
                 const rTime = rTrack.updatedAt || 0;
                 const lTime = lTrack.updatedAt || 0;
                 
                 if (rTime > lTime) {
-                    // リモートの方が新しいので上書き
                     rTrack.fileBlob = lTrack.fileBlob; 
                     if (rTrack.deleted) {
                         delete rTrack.fileBlob; 
@@ -247,7 +456,6 @@ async function performDriveSync() {
                     await saveTrackToDB(rTrack);
                     localTrackMap.set(rTrack.id, rTrack);
                 } else {
-                    // ローカルの方が新しい（または同じ）。キャッシュモード切り替え時のBlob補完だけチェック
                     if (!lTrack.deleted && !appState.isStreaming && !lTrack.fileBlob && lTrack.driveFileId) {
                         const blob = await downloadFileFromDrive(lTrack.driveFileId, syncStatus, lTrack.title);
                         if (blob) {
@@ -259,7 +467,6 @@ async function performDriveSync() {
             }
         }
 
-        // 新規ローカルファイルのDriveアップロード
         for (let lTrack of localTrackMap.values()) {
             if (!lTrack.deleted && !lTrack.driveFileId && lTrack.fileBlob) {
                 if (syncStatus) syncStatus.textContent = `UP中: ${lTrack.title}`;
@@ -270,7 +477,6 @@ async function performDriveSync() {
             }
         }
 
-        // 3. Playlists のマージ
         for (let rPl of remotePlaylists) {
             let lPl = localPlaylistMap.get(rPl.id);
             if (!lPl) {
@@ -286,7 +492,6 @@ async function performDriveSync() {
             }
         }
 
-        // 4. 最新の状態をJSON化してアップロード
         if (syncStatus) syncStatus.textContent = "設定を保存中...";
         
         const finalTracksToSync = Array.from(localTrackMap.values()).map(t => {
@@ -306,7 +511,6 @@ async function performDriveSync() {
         
         await uploadFileToDrive(jsonBlob, 'library_sync.json', 'application/json', folderId, existingJsonId);
 
-        // 画面を更新
         await loadLibrary();
         await loadPlaylists();
 
@@ -323,7 +527,6 @@ async function performDriveSync() {
     }
 }
 
-// === Drive API ヘルパー関数 ===
 async function getOrCreateSyncFolder() {
     const existingId = await findDriveFile(SYNC_FOLDER_NAME, 'application/vnd.google-apps.folder');
     if (existingId) return existingId;
@@ -539,21 +742,16 @@ function initPlayerControls() {
     audioPlayer.addEventListener('ended', playNext);
 }
 
-function formatTime(seconds) {
-    if (isNaN(seconds)) return "0:00";
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-}
-
 function playTrack(index) {
     if (index < 0 || index >= appState.currentQueue.length) return;
+    
+    stopPlaybackTracking(); // ★ 前の曲の再生時間記録を停止
+
     const track = appState.currentQueue[index];
     appState.currentTrackIndex = index;
 
     if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
     
-    // ★ ストリーミングかキャッシュかによる再生元の分岐
     if (track.fileBlob) {
         currentObjectUrl = URL.createObjectURL(track.fileBlob);
         audioPlayer.src = currentObjectUrl;
@@ -572,6 +770,7 @@ function playTrack(index) {
             appState.isPlaying = true;
             updatePlayerUI(track);
             renderMainTrackList(); 
+            startPlaybackTracking(); // ★ 再生時間記録を開始
         })
         .catch(e => console.error("再生エラー:", e));
 }
@@ -581,10 +780,13 @@ function togglePlay() {
     if (appState.isPlaying) {
         audioPlayer.pause();
         appState.isPlaying = false;
+        stopPlaybackTracking(); // ★ 停止
     } else {
         if (audioPlayer.src) {
-            audioPlayer.play();
-            appState.isPlaying = true;
+            audioPlayer.play().then(() => {
+                appState.isPlaying = true;
+                startPlaybackTracking(); // ★ 開始
+            });
         } else playTrack(0);
     }
     updatePlayButtonUI();
@@ -676,8 +878,8 @@ async function handleFiles(files) {
             artist: meta.artist || "不明なアーティスト",
             date: "", tags: [], thumbnailDataUrl: meta.picture || null, 
             addedAt: Date.now(), sortOrder: Date.now(),
-            updatedAt: Date.now(), // ★ 更新日時を付与
-            deleted: false,        // ★ 論理削除フラグ
+            updatedAt: Date.now(), 
+            deleted: false,        
             driveFileId: null 
         };
         await saveTrackToDB(newTrack);
@@ -695,6 +897,15 @@ function saveTrackToDB(track) {
     });
 }
 
+function deleteTrackFromDB(id) {
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(['tracks'], 'readwrite');
+        const request = transaction.objectStore('tracks').delete(id);
+        request.onsuccess = () => resolve();
+        request.onerror = (e) => reject(e.target.error);
+    });
+}
+
 function savePlaylistToDB(pl) {
     return new Promise((resolve, reject) => {
         const tx = db.transaction(['playlists'], 'readwrite');
@@ -704,7 +915,6 @@ function savePlaylistToDB(pl) {
     });
 }
 
-// 生データ（削除済みも含む）取得用
 function getAllTracksFromDBRaw() {
     return new Promise((resolve, reject) => {
         const transaction = db.transaction(['tracks'], 'readonly');
@@ -723,7 +933,6 @@ function getAllPlaylistsFromDBRaw() {
 }
 
 async function loadLibrary() {
-    // 表示用には論理削除されていないものだけを取得
     const allTracks = await getAllTracksFromDBRaw();
     appState.tracks = allTracks.filter(t => !t.deleted);
     
@@ -786,20 +995,21 @@ async function saveManualOrder() {
         const pl = appState.playlists.find(p => p.id === appState.currentPlaylistId);
         if (pl) {
             pl.trackIds = appState.currentQueue.map(t => t.id);
-            pl.updatedAt = Date.now(); // ★ 更新日時
+            pl.updatedAt = Date.now(); 
             await savePlaylistToDB(pl);
             autoSync(); 
         }
     } else {
         if (!appState.searchQueryMain) {
             appState.tracks = [...appState.currentQueue];
-            for (let i = 0; i < appState.tracks.length; i++) {
-                let t = appState.tracks[i];
+            const tx = db.transaction(['tracks'], 'readwrite');
+            const store = tx.objectStore('tracks');
+            appState.tracks.forEach((t, i) => {
                 t.sortOrder = i;
-                t.updatedAt = Date.now(); // ★ 更新日時
-                await saveTrackToDB(t);
-            }
-            autoSync();
+                t.updatedAt = Date.now(); 
+                store.put(t);
+            });
+            tx.oncomplete = () => autoSync(); 
         }
     }
 }
@@ -1014,7 +1224,6 @@ function initBulkActions() {
 async function deleteTracksCompletely(trackIds) {
     if (!confirm(`${trackIds.length}曲をライブラリから完全に削除しますか？\n（この操作は元に戻せません）`)) return;
 
-    // プレイリストからの削除
     const playlists = await getAllPlaylistsFromDBRaw();
     for (let pl of playlists) {
         let changed = false;
@@ -1031,7 +1240,6 @@ async function deleteTracksCompletely(trackIds) {
         }
     }
 
-    // トラックの論理削除（実ファイルBlobは容量削減のため消す）
     const tracks = await getAllTracksFromDBRaw();
     for (let id of trackIds) {
         let track = tracks.find(t => t.id === id);
@@ -1058,8 +1266,8 @@ function initPlaylists() {
             id: 'pl_' + Date.now(), 
             name: name, 
             trackIds: [], 
-            updatedAt: Date.now(), // ★
-            deleted: false         // ★
+            updatedAt: Date.now(), 
+            deleted: false         
         };
         await savePlaylistToDB(newList);
         await loadPlaylists();
@@ -1161,7 +1369,7 @@ async function addTracksToPlaylist(playlistId, trackIdsArray) {
         return;
     }
 
-    pl.updatedAt = Date.now(); // ★
+    pl.updatedAt = Date.now(); 
     await savePlaylistToDB(pl);
     
     appState.selectedMainTracks.clear();
@@ -1178,7 +1386,7 @@ async function removeTracksFromPlaylist(playlistId, trackIdsArray) {
     if (!pl) return;
 
     pl.trackIds = pl.trackIds.filter(id => !trackIdsArray.includes(id));
-    pl.updatedAt = Date.now(); // ★
+    pl.updatedAt = Date.now(); 
     
     await savePlaylistToDB(pl);
     
@@ -1193,7 +1401,7 @@ async function deletePlaylist(playlistId, playlistName) {
 
     const pl = appState.playlists.find(p => p.id === playlistId);
     if (pl) {
-        pl.deleted = true; // ★論理削除
+        pl.deleted = true; 
         pl.updatedAt = Date.now();
         await savePlaylistToDB(pl);
     }
@@ -1377,7 +1585,7 @@ function initEditPage() {
                     });
                     track.tags = combinedTags;
                 }
-                track.updatedAt = Date.now(); // ★
+                track.updatedAt = Date.now(); 
                 tracksToUpdate.push(track);
             }
         });
