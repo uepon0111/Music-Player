@@ -4,7 +4,6 @@
 
 // ★ 取得したクライアントIDを以下に必ず貼り付けてください
 const GOOGLE_CLIENT_ID = 'ここに取得したクライアントIDを貼り付けます';
-
 const SYNC_FOLDER_NAME = 'WebMusicPlayer_Sync'; // Drive内に作成されるフォルダ名
 
 const DB_NAME = 'MusicPlayerDB';
@@ -159,56 +158,122 @@ function updateAuthUIDisplay() {
     }
 }
 
-// ★ 自動同期のラッパー関数 (データ変更時に各所から呼ばれる)
+// データの追加・削除・編集時に呼び出すラッパー関数
 function autoSync() {
-    // ログイン済み、かつ現在同期中でなければ実行
     if (appState.isLoggedIn && !appState.isSyncing) {
         performDriveSync();
     }
 }
 
-// === Drive同期メイン処理 ===
+// === Drive自動同期メイン処理 (ダウンロード / アップロード) ===
 async function performDriveSync() {
     if (!gapiAccessToken) return;
     
+    const syncStatus = document.getElementById('sync-status');
     appState.isSyncing = true;
-    console.log("Driveと同期中...");
+    if (syncStatus) syncStatus.textContent = "同期中...";
 
     try {
-        // 1. 同期用フォルダのIDを取得（なければ作成）
         const folderId = await getOrCreateSyncFolder();
         
-        // 2. 音声ファイルのアップロード（未アップロードのもののみ）
-        for (let track of appState.tracks) {
+        // 1. Drive上のJSONをダウンロードして変更を確認
+        const existingJsonId = await findDriveFile('library_sync.json', 'application/json', folderId);
+        let remoteData = null;
+        if (existingJsonId) {
+            const res = await fetch(`https://www.googleapis.com/drive/v3/files/${existingJsonId}?alt=media`, {
+                headers: { Authorization: `Bearer ${gapiAccessToken}` }
+            });
+            if (res.ok) {
+                remoteData = await res.json();
+            }
+        }
+
+        // 2. ローカルデータとリモートデータ(JSON)のマージ処理
+        const localTracks = await getAllTracksFromDB();
+
+        if (remoteData && remoteData.tracks) {
+            const remoteTrackIds = new Set(remoteData.tracks.map(t => t.id));
+            const localTrackIds = new Set(localTracks.map(t => t.id));
+
+            // a. リモートにあってローカルにない曲（別端末で追加された）をダウンロード
+            for (let rTrack of remoteData.tracks) {
+                if (!localTrackIds.has(rTrack.id) && rTrack.driveFileId) {
+                    if (syncStatus) syncStatus.textContent = `DL中: ${rTrack.title}`;
+                    try {
+                        const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${rTrack.driveFileId}?alt=media`, {
+                            headers: { Authorization: `Bearer ${gapiAccessToken}` }
+                        });
+                        if (fileRes.ok) {
+                            const blob = await fileRes.blob();
+                            rTrack.fileBlob = blob;
+                            await saveTrackToDB(rTrack);
+                        }
+                    } catch (e) {
+                        console.error("ファイルダウンロード失敗:", e);
+                    }
+                }
+            }
+
+            // b. リモートから消えていて、ローカルに存在する曲（別端末で削除された）をローカルからも削除
+            for (let lTrack of localTracks) {
+                if (lTrack.driveFileId && !remoteTrackIds.has(lTrack.id)) {
+                    await deleteTrackFromDB(lTrack.id);
+                }
+            }
+            
+            // プレイリストもリモートに存在すればマージ（上書き）
+            if (remoteData.playlists) {
+                const tx = db.transaction(['playlists'], 'readwrite');
+                const store = tx.objectStore('playlists');
+                await store.clear();
+                remoteData.playlists.forEach(pl => store.put(pl));
+            }
+        }
+
+        // 最新のローカルデータを再取得
+        const updatedLocalTracks = await getAllTracksFromDB();
+        
+        // 3. ローカルにあり、Drive未アップロードのもの（新規追加曲）をアップロード
+        for (let track of updatedLocalTracks) {
             if (track.fileBlob && !track.driveFileId) {
-                console.log(`アップロード中: ${track.title}`);
+                if (syncStatus) syncStatus.textContent = `UP中: ${track.title}`;
                 const driveFileId = await uploadFileToDrive(track.fileBlob, track.fileName, track.fileBlob.type, folderId);
-                
                 track.driveFileId = driveFileId;
                 await saveTrackToDB(track); 
             }
         }
 
-        // 3. JSONファイル（曲情報＋プレイリスト情報）の生成とアップロード
+        // 4. 最新の情報をJSON化してアップロード
+        if (syncStatus) syncStatus.textContent = "設定を保存中...";
+        const finalTracks = await getAllTracksFromDB();
+        const finalPlaylists = await getAllPlaylistsFromDB();
+
         const syncData = {
-            tracks: appState.tracks.map(t => {
+            tracks: finalTracks.map(t => {
                 const { fileBlob, ...rest } = t; // Blob自体は除外して保存
                 return rest;
             }),
-            playlists: appState.playlists,
+            playlists: finalPlaylists,
             lastSyncedAt: Date.now()
         };
 
         const jsonString = JSON.stringify(syncData);
         const jsonBlob = new Blob([jsonString], { type: 'application/json' });
         
-        const existingJsonId = await findDriveFile('library_sync.json', 'application/json', folderId);
         await uploadFileToDrive(jsonBlob, 'library_sync.json', 'application/json', folderId, existingJsonId);
 
-        console.log("同期が完了しました！");
+        // 画面を更新
+        await loadLibrary();
+        await loadPlaylists();
+
+        if (syncStatus) syncStatus.textContent = "同期完了";
+        setTimeout(() => {
+            if (syncStatus) syncStatus.textContent = "";
+        }, 3000);
 
     } catch (error) {
         console.error("同期エラー:", error);
+        if (syncStatus) syncStatus.textContent = "同期失敗";
     } finally {
         appState.isSyncing = false;
     }
@@ -274,6 +339,7 @@ async function uploadFileToDrive(blob, filename, mimeType, folderId, existingId 
 // ----------------------------------------------------
 // DB処理 & その他の機能
 // ----------------------------------------------------
+
 function initPlaylistPlaybackControls() {
     const btnPlayAll = document.getElementById('btn-play-all');
     const btnShuffleAll = document.getElementById('btn-shuffle-all');
@@ -568,6 +634,15 @@ function saveTrackToDB(track) {
     return new Promise((resolve, reject) => {
         const transaction = db.transaction(['tracks'], 'readwrite');
         const request = transaction.objectStore('tracks').put(track);
+        request.onsuccess = () => resolve();
+        request.onerror = (e) => reject(e.target.error);
+    });
+}
+
+function deleteTrackFromDB(id) {
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(['tracks'], 'readwrite');
+        const request = transaction.objectStore('tracks').delete(id);
         request.onsuccess = () => resolve();
         request.onerror = (e) => reject(e.target.error);
     });
@@ -1027,7 +1102,7 @@ async function addTracksToPlaylist(playlistId, trackIdsArray) {
         await loadPlaylists(); 
         if (appState.currentPlaylistId === playlistId) updateMainQueue();
         alert(`「${pl.name}」に ${addedCount}曲 追加しました！`);
-        autoSync(); // ★プレイリストに曲を追加した時に自動同期
+        autoSync(); // ★プレイリスト追加時に自動同期
     };
 }
 
@@ -1046,7 +1121,7 @@ async function removeTracksFromPlaylist(playlistId, trackIdsArray) {
         appState.selectedMainTracks.clear();
         await loadPlaylists();
         updateMainQueue();
-        autoSync(); // ★プレイリストから曲を外した時に自動同期
+        autoSync(); // ★プレイリストから削除時に自動同期
     };
 }
 
@@ -1250,7 +1325,7 @@ function initEditPage() {
             appState.selectedEditTracks.clear();
             renderEditLibraryList();
             clearEditForm();
-            autoSync(); // ★メタデータ保存時に自動同期
+            autoSync(); // ★メタデータ変更時に自動同期
         };
     });
 }
