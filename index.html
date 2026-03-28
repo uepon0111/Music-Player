@@ -11,12 +11,12 @@
 </head>
 <body>
 
-    <header class="header">
-        <div class="logo">
-            <span class="material-symbols-outlined" style="font-size: 28px;">music_cast</span>
-            <h1>MusicPlayer</h1>
-        </div>
-        <div style="display: flex; align-items: center; gap: 16px;">
+    <header class="header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+        <div style="display: flex; align-items: center; gap: 24px;">
+            <div class="logo">
+                <span class="material-symbols-outlined" style="font-size: 28px;">music_cast</span>
+                <h1>MusicPlayer</h1>
+            </div>
             <nav class="nav-links">
                 <button class="nav-btn active" data-target="player">
                     <span class="material-symbols-outlined">play_circle</span>
@@ -31,17 +31,20 @@
                     <span>ログ・統計</span>
                 </button>
             </nav>
-            
-            <div class="auth-container" style="border-left: 1px solid var(--border-color); padding-left: 16px;">
-                <button id="btn-login" class="secondary-btn" style="display: flex; align-items: center; gap: 4px;">
-                    <span class="material-symbols-outlined" style="font-size: 18px;">login</span>
-                    <span>ログイン</span>
-                </button>
-                <div id="user-info" style="display: none; align-items: center; gap: 8px;">
-                    <span class="material-symbols-outlined" style="font-size: 24px; color: var(--accent-color);">account_circle</span>
-                    <span id="user-name" style="font-size: 14px; font-weight: bold;"></span>
-                    <button id="btn-logout" class="icon-btn" title="ログアウト"><span class="material-symbols-outlined">logout</span></button>
-                </div>
+        </div>
+        
+        <div class="auth-container">
+            <button id="btn-login" class="secondary-btn" style="display: flex; align-items: center; gap: 4px;">
+                <span class="material-symbols-outlined" style="font-size: 18px;">login</span>
+                <span>Googleでログイン</span>
+            </button>
+            <div id="user-info" style="display: none; align-items: center; gap: 8px;">
+                <span id="sync-status" style="font-size: 12px; color: var(--accent-color); margin-right: 8px; font-weight: bold;"></span>
+                
+                <span class="material-symbols-outlined" style="font-size: 24px; color: var(--text-secondary);">account_circle</span>
+                <span id="user-name" style="font-size: 14px; font-weight: bold; margin-right: 8px;"></span>
+                
+                <button id="btn-logout" class="icon-btn" title="ログアウト"><span class="material-symbols-outlined">logout</span></button>
             </div>
         </div>
     </header>
