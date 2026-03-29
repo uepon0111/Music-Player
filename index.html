@@ -110,9 +110,7 @@
                         </div>
                         <div class="extra-btns">
                             <button id="ctrl-speed" class="speed-btn" title="再生速度">1x</button>
-                            <button id="ctrl-queue" class="icon-btn sm" title="再生キュー">
-                                <span class="material-symbols-rounded">queue_music</span>
-                            </button>
+                            <!-- キューボタン削除済み -->
                         </div>
                     </div>
                 </div>
@@ -126,11 +124,13 @@
                         <input type="text" id="main-search-input" placeholder="曲名、アーティスト、タグで検索">
                     </div>
                     <div class="right-header-actions">
-                        <button id="create-playlist-btn" class="icon-btn" title="プレイリスト作成">
+                        <button id="create-playlist-btn" class="action-btn header-action-btn" title="プレイリスト作成">
                             <span class="material-symbols-rounded">playlist_add</span>
+                            <span class="btn-label-text">プレイリスト</span>
                         </button>
-                        <div id="drop-zone-small" class="drop-zone-small" title="ファイルをドロップ、またはクリックして追加">
+                        <div id="drop-zone-small" class="action-btn header-action-btn primary drop-zone-btn" title="音楽ファイルを追加（クリックまたはドロップ）">
                             <span class="material-symbols-rounded">upload_file</span>
+                            <span class="btn-label-text">ファイル追加</span>
                             <input type="file" id="file-upload" accept="audio/*" multiple style="display:none">
                         </div>
                     </div>
@@ -149,20 +149,9 @@
                 <!-- 曲一覧ヘッダー -->
                 <div class="tracklist-header">
                     <div class="tracklist-header-left">
-                        <label class="check-all-label">
-                            <input type="checkbox" id="main-select-all" class="custom-checkbox">
-                        </label>
                         <h2 id="current-playlist-name" class="tracklist-title">すべての曲</h2>
                     </div>
                     <div class="tracklist-header-right">
-                        <button id="btn-play-all" class="action-btn primary">
-                            <span class="material-symbols-rounded">play_arrow</span>
-                            再生
-                        </button>
-                        <button id="btn-shuffle-all" class="action-btn">
-                            <span class="material-symbols-rounded">shuffle</span>
-                            シャッフル
-                        </button>
                         <select id="main-sort-select" class="sort-select">
                             <option value="manual">手動順</option>
                             <option value="date_desc">追加日（新しい順）</option>
@@ -173,8 +162,15 @@
                             <option value="artist_desc">アーティスト（降順）</option>
                             <option value="release_desc">リリース日（新しい順）</option>
                             <option value="release_asc">リリース日（古い順）</option>
-                            <option value="random">ランダム</option>
                         </select>
+                        <button id="btn-select-mode" class="action-btn select-mode-toggle-btn">
+                            <span class="material-symbols-rounded">checklist</span>
+                            <span class="btn-label-text">選択</span>
+                        </button>
+                        <button id="btn-select-all" class="action-btn" style="display:none;">
+                            <span class="material-symbols-rounded">select_all</span>
+                            <span class="btn-label-text">全選択</span>
+                        </button>
                     </div>
                 </div>
 
@@ -203,7 +199,8 @@
                     <span class="material-symbols-rounded">upload_file</span>
                     <p>ここにファイルをドロップ</p>
                     <span class="drop-sub">または</span>
-                    <button class="action-btn" onclick="document.getElementById('file-upload').click()">
+                    <button class="action-btn primary" onclick="document.getElementById('file-upload').click()">
+                        <span class="material-symbols-rounded">folder_open</span>
                         ファイルを選択
                     </button>
                 </div>
@@ -216,6 +213,7 @@
         <div class="log-page">
             <div class="log-header">
                 <h1 class="page-title">ログ・統計</h1>
+                <span id="log-sync-status" class="log-sync-badge"></span>
             </div>
 
             <!-- サマリーカード -->
@@ -266,6 +264,17 @@
                     <div class="seg-control" id="log-period">
                         <button class="seg-btn active" data-value="all">全期間</button>
                         <button class="seg-btn" data-value="day">今日</button>
+                        <button class="seg-btn" data-value="week">今週</button>
+                        <button class="seg-btn" data-value="month">今月</button>
+                        <button class="seg-btn" data-value="year">今年</button>
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <span class="filter-label">グラフ単位</span>
+                    <div class="seg-control" id="log-unit">
+                        <button class="seg-btn active" data-value="auto">自動</button>
+                        <button class="seg-btn" data-value="hour">時間</button>
+                        <button class="seg-btn" data-value="day">日</button>
                         <button class="seg-btn" data-value="week">週</button>
                         <button class="seg-btn" data-value="month">月</button>
                         <button class="seg-btn" data-value="year">年</button>
@@ -296,7 +305,12 @@
             <!-- ランキング -->
             <div class="log-ranking" id="log-ranking">
                 <h3 class="ranking-title" id="ranking-title">再生時間ランキング</h3>
-                <ol class="ranking-list" id="ranking-list"></ol>
+
+                <!-- 1位ハイライトカード -->
+                <div id="ranking-first-card" class="ranking-first-card" style="display:none;"></div>
+
+                <!-- 2位以降リスト -->
+                <ol class="ranking-list" id="ranking-list" start="2"></ol>
             </div>
         </div>
     </section>
@@ -310,6 +324,38 @@
                     <span class="material-symbols-rounded">search</span>
                     <input type="text" id="edit-search-input" placeholder="曲名・アーティストで検索">
                 </div>
+                <div class="edit-header-controls">
+                    <select id="edit-sort-select" class="sort-select">
+                        <option value="manual">追加順</option>
+                        <option value="date_desc">追加日（新しい順）</option>
+                        <option value="date_asc">追加日（古い順）</option>
+                        <option value="name_asc">タイトル（昇順）</option>
+                        <option value="name_desc">タイトル（降順）</option>
+                        <option value="artist_asc">アーティスト（昇順）</option>
+                        <option value="artist_desc">アーティスト（降順）</option>
+                        <option value="release_desc">リリース日（新しい順）</option>
+                        <option value="release_asc">リリース日（古い順）</option>
+                    </select>
+                    <button id="edit-select-mode-btn" class="action-btn select-mode-toggle-btn">
+                        <span class="material-symbols-rounded">checklist</span>
+                        <span class="btn-label-text">選択</span>
+                    </button>
+                    <button id="edit-select-all-btn" class="action-btn" style="display:none;">
+                        <span class="material-symbols-rounded">select_all</span>
+                        <span class="btn-label-text">全選択</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 編集ページ一括操作バー -->
+            <div id="edit-bulk-actions-bar" class="bulk-actions-bar">
+                <span id="edit-bulk-count" class="bulk-count">0曲を選択中</span>
+                <button id="edit-bulk-edit-btn" class="action-btn sm">
+                    <span class="material-symbols-rounded">edit</span>情報を編集
+                </button>
+                <button id="edit-bulk-delete-btn" class="action-btn sm danger">
+                    <span class="material-symbols-rounded">delete_forever</span>削除
+                </button>
             </div>
 
             <div class="edit-track-grid" id="edit-library-list"></div>
@@ -325,6 +371,32 @@
     <section id="settings" class="page-section">
         <div class="settings-page">
             <h1 class="page-title">設定</h1>
+
+            <!-- アカウントセクション -->
+            <div class="settings-group">
+                <h2 class="settings-group-title">アカウント</h2>
+                <div class="settings-item settings-auth-item">
+                    <div class="settings-item-info">
+                        <div class="settings-item-label">Googleアカウント</div>
+                        <div class="settings-item-desc">ログインすると再生ログ・ライブラリをGoogle Driveで別端末と同期できます</div>
+                    </div>
+                    <div class="settings-auth-controls">
+                        <span id="settings-sync-status" class="settings-sync-badge"></span>
+                        <button id="settings-btn-login" class="auth-btn">
+                            <span class="material-symbols-rounded">login</span>
+                            <span>Googleでログイン</span>
+                        </button>
+                        <div id="settings-user-info" style="display:none;">
+                            <span class="material-symbols-rounded" style="font-size:20px;color:var(--text-secondary);">account_circle</span>
+                            <span id="settings-user-name"></span>
+                            <button id="settings-btn-logout" class="action-btn danger sm">
+                                <span class="material-symbols-rounded">logout</span>
+                                ログアウト
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <div class="settings-group">
                 <h2 class="settings-group-title">Google Drive 同期</h2>
@@ -418,14 +490,20 @@
                     <label class="form-label">タイトル</label>
                     <input type="text" id="edit-title" class="form-input" placeholder="曲のタイトル">
                 </div>
+
+                <!-- アーティスト（候補選択UI） -->
                 <div class="form-field">
                     <label class="form-label">アーティスト</label>
-                    <input type="text" id="edit-artist" class="form-input" placeholder="アーティスト名">
+                    <input type="text" id="edit-artist" class="form-input" placeholder="アーティスト名を入力または下から選択" autocomplete="off" list="existing-artists-list">
+                    <datalist id="existing-artists-list"></datalist>
+                    <div class="existing-chips-row" id="existing-artists-row"></div>
                 </div>
+
                 <div class="form-field">
                     <label class="form-label">リリース日</label>
                     <input type="date" id="edit-date" class="form-input">
                 </div>
+
                 <div class="form-field">
                     <label class="form-label">タグ</label>
                     <div class="tags-input-area" id="tags-input-area">
@@ -433,6 +511,7 @@
                         <input type="text" id="edit-tags-input" class="tags-input" placeholder="タグを入力してEnter" list="existing-tags-list" autocomplete="off">
                         <datalist id="existing-tags-list"></datalist>
                     </div>
+                    <div class="existing-chips-row" id="existing-tags-row"></div>
                 </div>
             </div>
         </div>
@@ -467,6 +546,10 @@
     <button class="bottom-nav-btn" data-target="settings">
         <span class="material-symbols-rounded">settings</span>
         <span>設定</span>
+    </button>
+    <button class="bottom-nav-btn" id="bottom-auth-btn">
+        <span class="material-symbols-rounded" id="bottom-auth-icon">login</span>
+        <span id="bottom-auth-label">ログイン</span>
     </button>
 </nav>
 
@@ -506,9 +589,8 @@
                 <span class="material-symbols-rounded">keyboard_arrow_down</span>
             </button>
             <span class="fp-header-title">再生中</span>
-            <button class="icon-btn" id="fp-queue-btn">
-                <span class="material-symbols-rounded">queue_music</span>
-            </button>
+            <!-- キューボタン削除済み → スペーサー -->
+            <div style="width:36px;flex-shrink:0;"></div>
         </div>
 
         <div class="fp-artwork-wrap">
@@ -548,11 +630,11 @@
             </div>
 
             <div class="fp-extra">
-                <button id="fp-speed" class="speed-btn">1x</button>
+                <button id="fp-speed" class="speed-btn fp-speed-btn">1x</button>
                 <div class="fp-volume">
-                    <span class="material-symbols-rounded" style="font-size:16px;color:var(--text-tertiary)">volume_down</span>
+                    <span class="material-symbols-rounded fp-vol-icon">volume_down</span>
                     <input type="range" id="fp-volume-bar" value="100" min="0" max="100">
-                    <span class="material-symbols-rounded" style="font-size:16px;color:var(--text-tertiary)">volume_up</span>
+                    <span class="material-symbols-rounded fp-vol-icon">volume_up</span>
                 </div>
             </div>
         </div>
@@ -565,4 +647,3 @@
 <script src="app.js"></script>
 </body>
 </html>
-
