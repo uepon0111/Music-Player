@@ -1574,3 +1574,4 @@ kbd {
     /* 横画面でも編集グリッドは4列 */
     .edit-grid-row { grid-template-columns: repeat(4, 1fr); padding: 0 14px; }
 }
+
