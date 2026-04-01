@@ -1400,7 +1400,7 @@ function initAuthUI() {
         if (!tokenClient) {
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: GOOGLE_CLIENT_ID,
-                scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile',
+                scope: 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.profile',
                 callback: (tokenResponse) => {
                     if (tokenResponse && tokenResponse.access_token) {
                         gapiAccessToken = tokenResponse.access_token;
@@ -3994,4 +3994,3 @@ function getTagColorHex(str) {
     const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
     return '#' + '000000'.substring(0, 6 - c.length) + c;
 }
-
