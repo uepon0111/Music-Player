@@ -1,0 +1,1883 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Library Manager</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Alpine.js for UI state management -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+    
+    <!-- Phosphor Icons (Line icons) -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <!-- Chart.js for Analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- LocalForage for IndexedDB storage -->
+    <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
+    
+    <!-- jsmediatags for parsing ID3 tags -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'Noto Sans JP', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#3b82f6',
+                        primaryHover: '#2563eb',
+                        bgLight: '#f8fafc',
+                        surface: '#ffffff',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+        
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            background-color: theme('colors.bgLight');
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Custom Scrollbar for a clean look */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Range Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 12px;
+            width: 12px;
+            border-radius: 50%;
+            background: theme('colors.primary');
+            cursor: pointer;
+            margin-top: -4px;
+            box-shadow: 0 0 2px rgba(0,0,0,0.2);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #e2e8f0;
+            border-radius: 2px;
+        }
+        
+        /* Hide scrollbar for mobile nav */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+
+<body x-data="appData()" x-init="initApp" class="h-screen w-screen overflow-hidden flex flex-col text-slate-800" @keydown.window="handleShortcut($event)">
+
+    <!-- Toast Notification -->
+    <div class="fixed top-4 right-4 z-[200] flex flex-col gap-2 pointer-events-none">
+        <template x-for="toast in toasts" :key="toast.id">
+            <div x-transition.opacity.duration.300ms class="bg-slate-800 text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 text-sm pointer-events-auto">
+                <i :class="toast.type === 'error' ? 'ph-fill ph-warning-circle text-red-400 text-lg' : 'ph-fill ph-check-circle text-green-400 text-lg'"></i>
+                <span x-text="toast.message"></span>
+            </div>
+        </template>
+    </div>
+
+    <!-- Main Container: Sidebar (PC) + Content -->
+    <div class="flex flex-1 overflow-hidden relative">
+        
+        <!-- Desktop Sidebar -->
+        <aside class="hidden md:flex flex-col w-64 bg-surface border-r border-slate-200 z-10 flex-shrink-0">
+            <div class="p-6">
+                <h1 class="text-xl font-bold flex items-center gap-2 text-primary cursor-pointer" @click="resetLibraryFilter(); currentPage = 'home'">
+                    <i class="ph ph-waves text-2xl"></i>
+                    AudioLib
+                </h1>
+            </div>
+            
+            <nav class="flex-1 overflow-y-auto px-4 space-y-1">
+                <template x-for="item in navItems" :key="item.id">
+                    <button @click="navigate(item.id)" 
+                            class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors duration-200"
+                            :class="currentPage === item.id && !libraryFilter.active ? 'bg-blue-50 text-primary font-medium' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'">
+                        <i :class="item.icon + ' text-xl'"></i>
+                        <span x-text="item.label"></span>
+                    </button>
+                </template>
+            </nav>
+
+            <div class="p-4 border-t border-slate-200">
+                <button @click="openUploadModal()" class="w-full bg-primary hover:bg-primaryHover text-white py-3 rounded-xl flex items-center justify-center gap-2 font-medium transition-colors shadow-sm">
+                    <i class="ph ph-plus-circle text-lg"></i>
+                    音声を追加
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 flex flex-col relative overflow-hidden bg-bgLight w-full">
+            
+            <!-- Mobile Header -->
+            <header class="md:hidden bg-surface border-b border-slate-200 px-4 py-3 flex items-center justify-between z-10 shadow-sm">
+                <div class="flex items-center gap-3">
+                    <button @click="isMobileMenuOpen = true" class="text-slate-600 p-2 -ml-2 hover:bg-slate-50 rounded-full transition-colors">
+                        <i class="ph ph-list text-2xl"></i>
+                    </button>
+                    <h1 class="text-lg font-bold flex items-center gap-2 text-primary" @click="resetLibraryFilter(); currentPage = 'home'">
+                        <i class="ph ph-waves text-xl"></i>
+                        AudioLib
+                    </h1>
+                </div>
+                <button @click="openUploadModal()" class="text-slate-600 p-2 bg-slate-100 rounded-full transition-colors active:scale-95">
+                    <i class="ph ph-plus text-xl"></i>
+                </button>
+            </header>
+
+            <!-- Scrollable Content -->
+            <div class="flex-1 overflow-y-auto p-4 md:p-8 pb-32 md:pb-36" id="main-scroll-area">
+                
+                <!-- HOME View -->
+                <div x-show="currentPage === 'home'" x-transition.opacity>
+                    <header class="mb-8">
+                        <h2 class="text-2xl font-bold">ダッシュボード</h2>
+                        <p class="text-slate-500 text-sm mt-1">現在のライブラリ状況とおすすめ</p>
+                    </header>
+
+                    <!-- Anniversary/Highlights Banner -->
+                    <div class="rounded-2xl text-white mb-8 shadow-sm relative overflow-hidden h-48 flex items-center bg-slate-900 group" x-show="anniversaries.length > 0">
+                        <template x-for="(anni, index) in anniversaries" :key="index">
+                            <div x-show="currentAnniversaryIndex === index" 
+                                 x-transition:enter="transition ease-out duration-700 transform"
+                                 x-transition:enter-start="opacity-0 scale-105"
+                                 x-transition:enter-end="opacity-100 scale-100"
+                                 x-transition:leave="transition ease-in duration-700 transform absolute inset-0"
+                                 x-transition:leave-start="opacity-100 scale-100"
+                                 x-transition:leave-end="opacity-0 scale-95"
+                                 class="absolute inset-0 w-full h-full">
+                                
+                                <div class="absolute inset-0">
+                                    <img :src="anni.thumb || defaultThumbUrl" class="w-full h-full object-cover opacity-40 blur-md mix-blend-overlay">
+                                    <div class="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900/90 to-transparent"></div>
+                                </div>
+
+                                <div class="absolute inset-0 p-6 sm:p-8 flex items-center justify-between z-10">
+                                    <div class="flex items-center gap-6 w-full cursor-pointer" @click="playTrack(anni)">
+                                        <div class="w-24 h-24 sm:w-32 sm:h-32 rounded-xl overflow-hidden shadow-2xl flex-shrink-0 border border-white/20 bg-slate-800">
+                                            <img :src="anni.thumb || defaultThumbUrl" class="w-full h-full object-cover">
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center gap-2 text-amber-400 text-xs sm:text-sm font-bold mb-1 sm:mb-2 tracking-wider">
+                                                <i class="ph-fill ph-confetti"></i> 
+                                                <span x-text="anni.isRecent ? '最近追加された音声' : '本日のアニバーサリー'"></span>
+                                            </div>
+                                            <h3 class="text-xl sm:text-3xl font-bold truncate mb-1 sm:mb-2 drop-shadow-md">
+                                                <span x-text="anni.title"></span>
+                                                <span x-show="!anni.isRecent" class="text-lg sm:text-2xl font-normal opacity-90 ml-2">(<span x-text="anni.years"></span>周年)</span>
+                                            </h3>
+                                            <p class="text-slate-300 text-xs sm:text-sm flex items-center gap-2 truncate">
+                                                <i class="ph ph-user"></i> <span x-text="anni.artist"></span>
+                                                <span class="mx-2">|</span>
+                                                <i class="ph ph-calendar-blank"></i> <span x-text="anni.date"></span> 追加
+                                            </p>
+                                        </div>
+                                        <button class="hidden sm:flex bg-white text-slate-900 hover:bg-slate-100 px-6 py-3 rounded-xl font-bold transition-transform hover:scale-105 shadow-xl items-center gap-2 flex-shrink-0" @click.stop="playTrack(anni)">
+                                            <i class="ph-fill ph-play"></i> 再生する
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                        <div class="absolute right-4 bottom-4 sm:hidden z-20">
+                            <button class="w-12 h-12 bg-white text-slate-900 rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-95" @click="playTrack(anniversaries[currentAnniversaryIndex])">
+                                <i class="ph-fill ph-play text-xl ml-1"></i>
+                            </button>
+                        </div>
+                        <div class="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2 z-20" x-show="anniversaries.length > 1">
+                            <template x-for="(anni, index) in anniversaries" :key="'ind-'+index">
+                                <button class="w-2 h-2 rounded-full transition-all duration-300" 
+                                        :class="currentAnniversaryIndex === index ? 'bg-white w-6' : 'bg-white/40 hover:bg-white/60'"
+                                        @click="currentAnniversaryIndex = index; resetAnniversaryInterval()"></button>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Recently Added -->
+                        <div class="lg:col-span-2 space-y-4">
+                            <div class="flex items-center justify-between">
+                                <h3 class="text-lg font-semibold">最近追加した音声</h3>
+                                <button @click="navigate('library')" class="text-primary text-sm font-medium hover:underline">すべて見る</button>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <template x-for="track in recentTracks" :key="track.id">
+                                    <div class="bg-surface p-3 rounded-xl border border-slate-200 flex items-center gap-4 hover:shadow-md transition-shadow cursor-pointer group relative" @click="playTrack(track)">
+                                        <div class="relative w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-slate-100">
+                                            <img :src="track.thumb || defaultThumbUrl" class="w-full h-full object-cover">
+                                            <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <i class="ph ph-play-fill text-white text-xl"></i>
+                                            </div>
+                                        </div>
+                                        <div class="flex-1 min-w-0 pr-8">
+                                            <h4 class="font-medium text-slate-900 truncate" x-text="track.title"></h4>
+                                            <p class="text-xs text-slate-500 truncate mt-0.5" x-text="track.artist"></p>
+                                        </div>
+                                        <button class="absolute right-2 text-slate-400 hover:text-primary p-2 rounded-lg hover:bg-slate-50 z-10" @click.stop="openTrackMenu($event, track)">
+                                            <i class="ph ph-dots-three-vertical text-lg"></i>
+                                        </button>
+                                    </div>
+                                </template>
+                                <div x-show="recentTracks.length === 0" class="col-span-1 sm:col-span-2 p-8 text-center bg-surface border border-slate-200 border-dashed rounded-xl text-slate-500 text-sm">
+                                    まだ音声ファイルがありません。右上の追加ボタンからアップロードしてください。
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Stats & Quick tags -->
+                        <div class="space-y-6">
+                            <div class="bg-surface rounded-2xl p-5 border border-slate-200 shadow-sm">
+                                <h3 class="text-sm font-semibold text-slate-500 mb-4 uppercase tracking-wider">ライブラリ状況</h3>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <div class="text-2xl font-bold" x-text="tracks.length.toLocaleString()"></div>
+                                        <div class="text-xs text-slate-500">合計トラック</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-2xl font-bold" x-text="playlists.length.toLocaleString()"></div>
+                                        <div class="text-xs text-slate-500">プレイリスト</div>
+                                    </div>
+                                    <div class="col-span-2">
+                                        <div class="text-xl font-bold"><span x-text="totalPlayTimeHours"></span><span class="text-sm font-normal text-slate-500 ml-1">時間</span></div>
+                                        <div class="text-xs text-slate-500">総再生時間 (記録上)</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div x-show="tags.length > 0">
+                                <h3 class="text-sm font-semibold mb-3">よく使うタグ</h3>
+                                <div class="flex flex-wrap gap-2">
+                                    <template x-for="tag in tags.slice(0, 8)" :key="tag.name">
+                                        <button @click="filterByTag(tag.name)" class="px-3 py-1 rounded-full text-xs font-medium border transition-transform hover:scale-105 active:scale-95"
+                                              :style="`background-color: ${tag.color}15; color: ${tag.color}; border-color: ${tag.color}30`"
+                                              x-text="tag.name"></button>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LIBRARY View -->
+                <div x-show="currentPage === 'library'" style="display: none;" x-transition.opacity class="h-full flex flex-col">
+                    <header class="mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <button x-show="libraryFilter.active" @click="resetLibraryFilter()" class="text-slate-400 hover:text-primary transition-colors">
+                                    <i class="ph ph-arrow-left text-xl"></i>
+                                </button>
+                                <h2 class="text-2xl font-bold" x-text="libraryFilter.active ? libraryFilter.title : '音声ライブラリ'"></h2>
+                            </div>
+                            <p class="text-slate-500 text-sm mt-1" x-text="libraryFilter.active ? libraryFilter.subtitle : 'すべての音声を管理'"></p>
+                        </div>
+                        
+                        <div class="flex flex-wrap items-center gap-2">
+                            <div class="relative w-full sm:w-64">
+                                <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                                <input type="text" x-model="searchQuery" placeholder="タイトル、アーティスト、タグで検索..." 
+                                       class="w-full bg-surface border border-slate-300 rounded-xl py-2 pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all">
+                            </div>
+                            <!-- Sort Dropdown -->
+                            <select x-model="sortOrder" class="bg-surface border border-slate-300 rounded-xl py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-slate-700 cursor-pointer">
+                                <option value="newest">追加日 (新しい順)</option>
+                                <option value="oldest">追加日 (古い順)</option>
+                                <option value="titleAsc">タイトル (A-Z)</option>
+                                <option value="titleDesc">タイトル (Z-A)</option>
+                                <option value="mostPlayed">再生回数 (多い順)</option>
+                            </select>
+                        </div>
+                    </header>
+
+                    <!-- List Area -->
+                    <div class="flex-1 bg-surface rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-[400px]">
+                        <div class="hidden md:grid grid-cols-12 gap-4 px-6 py-3 border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider sticky top-0 z-10">
+                            <div class="col-span-1"></div>
+                            <div class="col-span-5">タイトル / アーティスト</div>
+                            <div class="col-span-3">タグ</div>
+                            <div class="col-span-2">追加日</div>
+                            <div class="col-span-1 text-right">操作</div>
+                        </div>
+
+                        <div class="flex-1 overflow-y-auto">
+                            <template x-for="track in sortedFilteredTracks" :key="track.id">
+                                <div class="grid grid-cols-1 md:grid-cols-12 gap-4 p-4 md:px-6 items-center border-b border-slate-100 hover:bg-slate-50 transition-colors group"
+                                     :class="{'bg-blue-50/30': currentTrack && currentTrack.id === track.id}">
+                                    
+                                    <!-- Mobile Layout Mix / PC Col 1-6 -->
+                                    <div class="col-span-1 md:col-span-6 flex items-center gap-4 relative">
+                                        <div class="relative w-12 h-12 rounded-md overflow-hidden bg-slate-200 flex-shrink-0 cursor-pointer shadow-sm border border-slate-100" @click="playTrack(track)">
+                                            <img :src="track.thumb || defaultThumbUrl" class="w-full h-full object-cover">
+                                            <div class="absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity"
+                                                 :class="(currentTrack && currentTrack.id === track.id && isPlaying) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'">
+                                                <i class="text-white text-lg" :class="(currentTrack && currentTrack.id === track.id && isPlaying) ? 'ph-fill ph-chart-bar animate-pulse' : 'ph-fill ph-play'"></i>
+                                            </div>
+                                        </div>
+                                        <div class="min-w-0 flex-1">
+                                            <h4 class="font-medium text-slate-900 truncate" x-text="track.title" :class="{'text-primary': currentTrack && currentTrack.id === track.id}"></h4>
+                                            <p class="text-xs text-slate-500 truncate cursor-pointer hover:text-primary hover:underline" x-text="track.artist" @click.stop="filterByArtist(track.artist)"></p>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Tags -->
+                                    <div class="hidden md:flex col-span-3 flex-wrap gap-1">
+                                        <template x-for="tagName in (track.tags || [])">
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors" 
+                                                  x-text="tagName" @click.stop="filterByTag(tagName)"></span>
+                                        </template>
+                                    </div>
+
+                                    <!-- Date -->
+                                    <div class="hidden md:block col-span-2 text-sm text-slate-500">
+                                        <span x-text="formatDate(track.addedAt)"></span>
+                                    </div>
+
+                                    <!-- Actions -->
+                                    <div class="absolute right-4 md:static md:col-span-1 flex justify-end items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button @click.stop="toggleFavorite(track.id)" class="p-2 rounded-lg transition-colors focus:outline-none" :class="track.isFavorite ? 'text-red-500 hover:bg-red-50' : 'text-slate-400 hover:text-red-500 hover:bg-red-50'" title="お気に入り">
+                                            <i class="text-lg" :class="track.isFavorite ? 'ph-fill ph-heart' : 'ph ph-heart'"></i>
+                                        </button>
+                                        <button @click.stop="openTrackMenu($event, track)" class="p-2 text-slate-400 hover:text-primary rounded-lg hover:bg-blue-50 focus:outline-none">
+                                            <i class="ph ph-dots-three-vertical text-lg"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                            
+                            <div x-show="sortedFilteredTracks.length === 0" class="p-12 text-center flex flex-col items-center justify-center h-full min-h-[300px]">
+                                <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 mb-4">
+                                    <i class="ph ph-magnifying-glass text-2xl"></i>
+                                </div>
+                                <h3 class="text-slate-700 font-medium">見つかりませんでした</h3>
+                                <p class="text-slate-500 text-sm mt-1" x-text="tracks.length === 0 ? 'まずは音声をアップロードしてください。' : '検索条件を変更してみてください。'"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PLAYLISTS View -->
+                <div x-show="currentPage === 'playlists'" style="display: none;" x-transition.opacity>
+                    <header class="mb-6 flex justify-between items-end">
+                        <div>
+                            <h2 class="text-2xl font-bold">再生リスト</h2>
+                            <p class="text-slate-500 text-sm mt-1">お気に入りのリストを管理</p>
+                        </div>
+                        <button @click="createNewPlaylist()" class="bg-primary text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-primaryHover transition-colors shadow-sm flex items-center gap-2">
+                            <i class="ph ph-plus"></i> 新規作成
+                        </button>
+                    </header>
+
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+                        <template x-for="playlist in playlists" :key="playlist.id">
+                            <div class="bg-surface rounded-2xl p-4 border border-slate-200 hover:shadow-md transition-all cursor-pointer group relative" @click="filterByPlaylist(playlist)">
+                                <!-- Delete button for custom playlists -->
+                                <button x-show="playlist.id !== 'favorites'" @click.stop="deletePlaylist(playlist.id)" class="absolute top-2 right-2 w-8 h-8 bg-white/90 text-red-500 rounded-full flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:bg-red-50">
+                                    <i class="ph ph-trash"></i>
+                                </button>
+                                
+                                <div class="aspect-square bg-slate-100 rounded-xl mb-4 relative overflow-hidden flex flex-wrap shadow-inner border border-slate-100">
+                                    <template x-if="playlist.id === 'favorites'">
+                                        <div class="w-full h-full bg-gradient-to-br from-red-400 to-pink-500 flex items-center justify-center">
+                                            <i class="ph-fill ph-heart text-4xl text-white drop-shadow-md"></i>
+                                        </div>
+                                    </template>
+                                    <template x-if="playlist.id !== 'favorites'">
+                                        <template x-for="(thumb, i) in getPlaylistThumbs(playlist.id)" :key="i">
+                                            <div class="w-1/2 h-1/2 border-r border-b border-white relative bg-slate-200" :class="{'w-full h-full': getPlaylistThumbs(playlist.id).length === 1}">
+                                                <img x-show="thumb" :src="thumb" class="absolute inset-0 w-full h-full object-cover">
+                                                <div x-show="!thumb" class="absolute inset-0 flex items-center justify-center text-slate-300">
+                                                    <i class="ph ph-music-notes"></i>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </template>
+                                    
+                                    <div class="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center text-primary shadow-lg transition-transform hover:scale-110" @click.stop="playPlaylist(playlist)">
+                                            <i class="ph-fill ph-play text-lg ml-1"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                                <h3 class="font-bold text-slate-800 truncate" x-text="playlist.name"></h3>
+                                <div class="flex items-center text-xs text-slate-500 mt-1 gap-2">
+                                    <span><span x-text="playlist.trackIds.length"></span>曲</span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- TAGS View -->
+                <div x-show="currentPage === 'tags'" style="display: none;" x-transition.opacity>
+                    <header class="mb-6">
+                        <h2 class="text-2xl font-bold">タグ管理</h2>
+                        <p class="text-slate-500 text-sm mt-1">音声を分類するためのタグをカスタマイズ</p>
+                    </header>
+                    <div class="bg-surface rounded-2xl border border-slate-200 shadow-sm p-6">
+                        <form @submit.prevent="addTag(newTagName, newTagColor)" class="flex flex-col sm:flex-row gap-2 mb-6">
+                            <input type="text" x-model="newTagName" placeholder="新しいタグ名を入力..." required class="flex-1 border border-slate-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-primary/50 outline-none">
+                            <div class="flex gap-2">
+                                <input type="color" x-model="newTagColor" class="w-12 h-10 p-1 border border-slate-300 rounded-xl cursor-pointer bg-white">
+                                <button type="submit" class="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-xl font-medium transition-colors w-full sm:w-auto">追加</button>
+                            </div>
+                        </form>
+                        
+                        <div class="text-xs text-slate-500 mb-4 flex items-center gap-1">
+                            <i class="ph ph-info"></i> タグをクリックすると該当する音声を検索します。
+                        </div>
+                        
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            <template x-for="tag in customTags" :key="tag.name">
+                                <div class="flex items-center justify-between p-3 border border-slate-200 rounded-xl bg-white hover:border-slate-300 shadow-sm transition-all group">
+                                    <div class="flex items-center gap-3 cursor-pointer flex-1 min-w-0" @click="filterByTag(tag.name)">
+                                        <div class="w-4 h-4 rounded-full shadow-inner flex-shrink-0" :style="`background-color: ${tag.color}`"></div>
+                                        <div class="min-w-0">
+                                            <div class="font-medium text-sm text-slate-800 truncate" x-text="tag.name"></div>
+                                            <div class="text-xs text-slate-500"><span x-text="getTrackCountByTag(tag.name)"></span> 曲</div>
+                                        </div>
+                                    </div>
+                                    <div class="flex gap-1">
+                                        <button @click="deleteTag(tag.name)" class="p-2 text-slate-400 hover:text-red-500 rounded-md cursor-pointer hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100" title="削除">
+                                            <i class="ph ph-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                            <div x-show="customTags.length === 0" class="col-span-full py-8 text-center text-slate-500 text-sm">
+                                タグはまだ登録されていません。
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ARTISTS View -->
+                <div x-show="currentPage === 'artists'" style="display: none;" x-transition.opacity>
+                    <header class="mb-6 flex justify-between items-end">
+                        <div>
+                            <h2 class="text-2xl font-bold">アーティスト</h2>
+                            <p class="text-slate-500 text-sm mt-1">自動抽出されたアーティスト一覧</p>
+                        </div>
+                    </header>
+
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+                        <template x-for="artist in artists" :key="artist.name">
+                            <div class="bg-surface rounded-2xl p-5 border border-slate-200 hover:shadow-md transition-all cursor-pointer group text-center" @click="filterByArtist(artist.name)">
+                                <div class="w-24 h-24 mx-auto rounded-full overflow-hidden bg-slate-100 mb-4 shadow-sm border border-slate-200 group-hover:border-primary/50 transition-colors relative">
+                                    <img :src="artist.icon || defaultThumbUrl" class="w-full h-full object-cover">
+                                    <div class="absolute inset-0 bg-black/5 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                        <i class="ph-fill ph-play text-white opacity-0 group-hover:opacity-100 text-2xl drop-shadow-md"></i>
+                                    </div>
+                                </div>
+                                <h3 class="font-bold text-slate-800 truncate px-2" x-text="artist.name"></h3>
+                                <div class="text-xs text-slate-500 mt-1">
+                                    <span x-text="artist.count"></span>曲
+                                </div>
+                            </div>
+                        </template>
+                        <div x-show="artists.length === 0" class="col-span-full py-12 text-center text-slate-500 bg-surface border border-slate-200 border-dashed rounded-2xl">
+                            登録されているアーティストがいません。
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ANALYTICS View -->
+                <div x-show="currentPage === 'analytics'" style="display: none;" x-transition.opacity>
+                    <header class="mb-6">
+                        <h2 class="text-2xl font-bold">再生分析</h2>
+                        <p class="text-slate-500 text-sm mt-1">視聴傾向と統計データ</p>
+                    </header>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Chart container -->
+                        <div class="bg-surface p-5 rounded-2xl border border-slate-200 shadow-sm col-span-1 lg:col-span-2">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="font-semibold text-slate-700">最近30日間の再生時間推移</h3>
+                            </div>
+                            <div class="relative h-64 w-full">
+                                <canvas id="playTimeChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Top Tracks -->
+                        <div class="bg-surface p-5 rounded-2xl border border-slate-200 shadow-sm">
+                            <h3 class="font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                                <i class="ph ph-medal text-yellow-500 text-xl"></i> よく聴く音声 (トップ5)
+                            </h3>
+                            <div class="space-y-3">
+                                <template x-for="(track, index) in topPlayedTracks" :key="track.id">
+                                    <div class="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors" @click="playTrack(track)">
+                                        <div class="w-6 text-center text-sm font-bold" :class="index < 3 ? 'text-amber-500' : 'text-slate-400'" x-text="index + 1"></div>
+                                        <img :src="track.thumb || defaultThumbUrl" class="w-10 h-10 rounded-md object-cover border border-slate-100 shadow-sm">
+                                        <div class="flex-1 min-w-0">
+                                            <div class="text-sm font-medium truncate text-slate-800" x-text="track.title"></div>
+                                            <div class="text-xs text-slate-500 truncate" x-text="track.artist"></div>
+                                        </div>
+                                        <div class="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-1 rounded-md whitespace-nowrap">
+                                            <span x-text="track.playCount || 0"></span>回
+                                        </div>
+                                    </div>
+                                </template>
+                                <div x-show="topPlayedTracks.length === 0" class="text-center py-8 text-sm text-slate-500">
+                                    まだ再生履歴がありません。
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Top Tags Chart -->
+                        <div class="bg-surface p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
+                             <h3 class="font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                                <i class="ph ph-chart-pie-slice text-primary text-xl"></i> タグ別登録割合
+                            </h3>
+                            <div class="relative flex-1 w-full flex justify-center min-h-[200px]">
+                                <canvas id="tagsChart"></canvas>
+                                <div x-show="tags.length === 0" class="absolute inset-0 flex items-center justify-center text-sm text-slate-500">
+                                    タグデータがありません。
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SETTINGS View -->
+                <div x-show="currentPage === 'settings'" style="display: none;" x-transition.opacity>
+                    <header class="mb-6">
+                        <h2 class="text-2xl font-bold">設定</h2>
+                        <p class="text-slate-500 text-sm mt-1">アプリの動作とストレージ管理</p>
+                    </header>
+
+                    <div class="max-w-3xl space-y-6">
+                        <!-- Playback Settings -->
+                        <section class="bg-surface p-6 rounded-2xl border border-slate-200 shadow-sm">
+                            <h3 class="text-lg font-semibold border-b border-slate-100 pb-3 mb-4 flex items-center gap-2">
+                                <i class="ph ph-play-circle text-primary"></i> 再生設定
+                            </h3>
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <div class="font-medium text-slate-800">連続再生</div>
+                                        <div class="text-sm text-slate-500">リストの最後まで再生した後に停止するかどうか</div>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" x-model="settings.continuousPlay" @change="saveSettings" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                                    </label>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <div class="font-medium text-slate-800">デフォルト再生速度</div>
+                                    </div>
+                                    <select x-model="settings.playbackRate" @change="setPlaybackRate(settings.playbackRate)" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white outline-none focus:border-primary">
+                                        <option value="0.5">0.5x</option>
+                                        <option value="0.75">0.75x</option>
+                                        <option value="1.0">1.0x (標準)</option>
+                                        <option value="1.25">1.25x</option>
+                                        <option value="1.5">1.5x</option>
+                                        <option value="2.0">2.0x</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Storage Management -->
+                        <section class="bg-surface p-6 rounded-2xl border border-slate-200 shadow-sm">
+                            <h3 class="text-lg font-semibold border-b border-slate-100 pb-3 mb-4 flex items-center gap-2">
+                                <i class="ph ph-database text-primary"></i> ストレージ管理 (ブラウザ保存)
+                            </h3>
+                            <div class="mb-4">
+                                <div class="flex justify-between text-sm mb-1">
+                                    <span class="font-medium">推定使用量</span>
+                                    <span class="text-slate-500">
+                                        <span x-text="formatBytes(storageUsage)"></span> / <span x-text="formatBytes(storageQuota)"></span>
+                                    </span>
+                                </div>
+                                <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden flex">
+                                    <div class="bg-primary h-full transition-all" :style="`width: ${Math.min((storageUsage / (storageQuota || 1)) * 100, 100)}%`"></div>
+                                </div>
+                                <p class="text-xs text-slate-500 mt-2">※音声ファイルの実体はブラウザの内部ストレージ(IndexedDB)に安全に保存されています。キャッシュをクリアするとデータが消える場合があります。</p>
+                            </div>
+                            
+                            <div class="flex flex-wrap gap-3 mt-6">
+                                <button @click="updateStorageInfo()" class="px-4 py-2 border border-slate-300 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors flex items-center gap-2">
+                                    <i class="ph ph-arrows-clockwise"></i> 計算を更新
+                                </button>
+                                <button @click="confirmClearData()" class="px-4 py-2 border border-red-200 text-red-600 bg-red-50 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors ml-auto">
+                                    すべてのデータを削除...
+                                </button>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- GLOBAL PLAYER (Fixed Bottom) -->
+    <div class="fixed bottom-0 left-0 right-0 bg-surface border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-[40] transition-transform duration-300"
+         :class="{'translate-y-0': currentTrack, 'translate-y-full': !currentTrack, 'md:left-64': true}">
+        
+        <!-- Progress Bar (Absolute top edge on mobile) -->
+        <div class="absolute top-0 left-0 right-0 h-1 bg-slate-200 md:hidden cursor-pointer" @click="seekByEvent($event)">
+            <div class="h-full bg-primary relative pointer-events-none" :style="`width: ${progress}%`">
+                <div class="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 bg-primary rounded-full transform translate-x-1/2"></div>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-between px-4 md:px-6 py-2 md:py-3 h-16 md:h-20">
+            <!-- Left: Track Info -->
+            <div class="flex items-center gap-3 w-1/3 min-w-[120px] max-w-[30%] cursor-pointer md:cursor-default group" @click="if(window.innerWidth < 768) openFullScreenPlayer()">
+                <div class="relative w-10 h-10 md:w-14 md:h-14 rounded overflow-hidden flex-shrink-0 bg-slate-100 shadow-sm border border-slate-200">
+                    <img :src="currentTrack ? (currentTrack.thumb || defaultThumbUrl) : defaultThumbUrl" class="w-full h-full object-cover">
+                    <div class="absolute inset-0 bg-black/30 flex items-center justify-center md:hidden opacity-0 group-hover:opacity-100 transition-opacity">
+                        <i class="ph ph-arrows-out-simple text-white"></i>
+                    </div>
+                </div>
+                <div class="min-w-0 flex-1 hidden sm:block">
+                    <div class="font-semibold text-sm md:text-base text-slate-900 truncate" x-text="currentTrack ? currentTrack.title : '未選択'"></div>
+                    <div class="text-xs text-slate-500 truncate" x-text="currentTrack ? currentTrack.artist : '-'"></div>
+                </div>
+            </div>
+
+            <!-- Center: Controls -->
+            <div class="hidden md:flex flex-col items-center flex-1 max-w-2xl px-4">
+                <div class="flex items-center gap-5 mb-1">
+                    <button class="text-slate-400 hover:text-primary transition-colors focus:outline-none" :class="{'text-primary': settings.isShuffle, 'opacity-50 cursor-not-allowed': !currentTrack}" @click="toggleShuffle()" :disabled="!currentTrack">
+                        <i class="ph-fill ph-shuffle text-xl"></i>
+                    </button>
+                    
+                    <button @click="playPrev()" class="text-slate-700 hover:text-slate-900 transition-colors active:scale-95 focus:outline-none" :class="{'opacity-50 cursor-not-allowed': !currentTrack}" :disabled="!currentTrack">
+                        <i class="ph-fill ph-skip-back-circle text-3xl"></i>
+                    </button>
+                    
+                    <button @click="togglePlay()" class="w-10 h-10 lg:w-12 lg:h-12 bg-primary text-white rounded-full flex items-center justify-center hover:bg-primaryHover transition-transform hover:scale-105 active:scale-95 shadow-md focus:outline-none" :disabled="!currentTrack" :class="{'opacity-50 cursor-not-allowed': !currentTrack}">
+                        <i class="text-xl lg:text-2xl" :class="isPlaying ? 'ph-fill ph-pause' : 'ph-fill ph-play'"></i>
+                    </button>
+                    
+                    <button @click="playNext()" class="text-slate-700 hover:text-slate-900 transition-colors active:scale-95 focus:outline-none" :class="{'opacity-50 cursor-not-allowed': !currentTrack}" :disabled="!currentTrack">
+                        <i class="ph-fill ph-skip-forward-circle text-3xl"></i>
+                    </button>
+
+                    <button class="text-slate-400 hover:text-primary transition-colors focus:outline-none relative" :class="{'text-primary': settings.loopMode !== 0, 'opacity-50 cursor-not-allowed': !currentTrack}" @click="toggleLoop()" :disabled="!currentTrack">
+                        <i class="text-xl" :class="settings.loopMode === 2 ? 'ph-fill ph-repeat-once' : 'ph-fill ph-repeat'"></i>
+                    </button>
+                </div>
+                
+                <div class="w-full flex items-center gap-3 text-xs text-slate-500 font-medium tracking-wide">
+                    <span class="w-10 text-right tabular-nums" x-text="formatTime(currentTime)"></span>
+                    <input type="range" min="0" max="100" step="0.1" x-model="progress" @input="seek($event.target.value)" class="flex-1 accent-primary outline-none focus:ring-2 focus:ring-primary/30 rounded-full" :disabled="!currentTrack">
+                    <span class="w-10 tabular-nums" x-text="formatTime(duration)"></span>
+                </div>
+            </div>
+
+            <!-- Right: Extra Controls -->
+            <div class="hidden md:flex items-center justify-end gap-3 w-1/3 min-w-[150px] pr-2">
+                <button @click="if(currentTrack) toggleFavorite(currentTrack.id)" class="p-2 transition-colors focus:outline-none" :class="(currentTrack && currentTrack.isFavorite) ? 'text-red-500' : 'text-slate-400 hover:text-red-500'">
+                    <i class="text-xl" :class="(currentTrack && currentTrack.isFavorite) ? 'ph-fill ph-heart' : 'ph ph-heart'"></i>
+                </button>
+
+                <div class="relative flex items-center group h-10 w-32" @mouseenter="isVolHover = true" @mouseleave="isVolHover = false" x-data="{ isVolHover: false }">
+                    <button @click="toggleMute()" class="text-slate-500 hover:text-slate-800 p-2 z-10 relative focus:outline-none">
+                        <i class="text-xl" :class="settings.volume == 0 ? 'ph ph-speaker-none' : (settings.volume > 50 ? 'ph ph-speaker-high' : 'ph ph-speaker-low')"></i>
+                    </button>
+                    <div class="flex-1 h-full flex items-center">
+                        <input type="range" min="0" max="100" x-model="settings.volume" @input="setVolume($event.target.value)" class="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary outline-none">
+                    </div>
+                </div>
+                
+                <button @click="openTrackMenu($event, currentTrack)" class="text-slate-500 hover:text-slate-800 p-2 bg-slate-50 hover:bg-slate-100 rounded-full transition-colors focus:outline-none" :disabled="!currentTrack">
+                    <i class="ph ph-dots-three-outline-vertical text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Mobile Mini Player Controls -->
+            <div class="flex items-center gap-3 md:hidden">
+                <button @click.stop="if(currentTrack) toggleFavorite(currentTrack.id)" class="p-2 transition-colors focus:outline-none" :class="(currentTrack && currentTrack.isFavorite) ? 'text-red-500' : 'text-slate-400 hover:text-red-500'">
+                    <i class="text-xl" :class="(currentTrack && currentTrack.isFavorite) ? 'ph-fill ph-heart' : 'ph ph-heart'"></i>
+                </button>
+                <button @click.stop="togglePlay()" class="w-10 h-10 flex items-center justify-center text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-full active:scale-95 transition-transform focus:outline-none">
+                    <i class="text-xl" :class="isPlaying ? 'ph-fill ph-pause' : 'ph-fill ph-play'"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Drawer Menu -->
+    <div x-show="isMobileMenuOpen" class="fixed inset-0 z-[100] md:hidden" style="display: none;">
+        <div x-show="isMobileMenuOpen" x-transition.opacity class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" @click="isMobileMenuOpen = false"></div>
+        <div x-show="isMobileMenuOpen"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="-translate-x-full"
+             x-transition:enter-end="translate-x-0"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="translate-x-0"
+             x-transition:leave-end="-translate-x-full"
+             class="fixed inset-y-0 left-0 w-64 bg-surface shadow-2xl flex flex-col">
+            <div class="p-6 border-b border-slate-100 flex items-center justify-between">
+                <h1 class="text-xl font-bold flex items-center gap-2 text-primary" @click="resetLibraryFilter(); currentPage = 'home'; isMobileMenuOpen = false;">
+                    <i class="ph ph-waves text-2xl"></i> AudioLib
+                </h1>
+                <button @click="isMobileMenuOpen = false" class="text-slate-400 p-1 hover:bg-slate-100 rounded-full transition-colors">
+                    <i class="ph ph-x text-xl"></i>
+                </button>
+            </div>
+            <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+                <template x-for="item in navItems" :key="item.id">
+                    <button @click="navigate(item.id); isMobileMenuOpen = false;" 
+                            class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors duration-200"
+                            :class="currentPage === item.id && !libraryFilter.active ? 'bg-blue-50 text-primary font-medium' : 'text-slate-600 hover:bg-slate-100'">
+                        <i :class="currentPage === item.id && !libraryFilter.active ? item.icon.replace('ph ', 'ph-fill ') + ' text-xl' : item.icon + ' text-xl'"></i>
+                        <span x-text="item.label"></span>
+                    </button>
+                </template>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Mobile Full Screen Player -->
+    <div x-show="isPlayerOpen" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="transform translate-y-full opacity-0"
+         x-transition:enter-end="transform translate-y-0 opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="transform translate-y-0 opacity-100"
+         x-transition:leave-end="transform translate-y-full opacity-0"
+         class="fixed inset-0 bg-surface z-[150] flex flex-col md:hidden">
+        
+        <div class="px-4 py-4 flex items-center justify-between mt-2">
+            <button @click="isPlayerOpen = false" class="p-2 text-slate-600 focus:outline-none">
+                <i class="ph ph-caret-down text-2xl"></i>
+            </button>
+            <div class="text-xs font-semibold text-slate-500 tracking-wider">再生中</div>
+            <button class="p-2 text-slate-600 focus:outline-none" @click="openTrackMenu($event, currentTrack)">
+                <i class="ph ph-dots-three-vertical text-2xl"></i>
+            </button>
+        </div>
+
+        <div class="flex-1 px-8 py-4 flex items-center justify-center min-h-0">
+            <div class="w-full aspect-square max-w-[320px] max-h-[320px] rounded-3xl overflow-hidden shadow-2xl relative bg-slate-100 transition-transform duration-500" :class="isPlaying ? 'scale-100' : 'scale-95'">
+                <img :src="currentTrack ? (currentTrack.thumb || defaultThumbUrl) : defaultThumbUrl" class="w-full h-full object-cover">
+            </div>
+        </div>
+
+        <div class="px-8 pb-10">
+            <div class="flex justify-between items-center mb-6">
+                <div class="min-w-0 flex-1">
+                    <h2 class="text-2xl font-bold text-slate-900 truncate" x-text="currentTrack ? currentTrack.title : ''"></h2>
+                    <p class="text-base text-slate-500 truncate mt-1" x-text="currentTrack ? currentTrack.artist : ''"></p>
+                </div>
+                <button class="p-2 ml-4 focus:outline-none transition-transform active:scale-90" :class="(currentTrack && currentTrack.isFavorite) ? 'text-red-500' : 'text-slate-400'" @click="if(currentTrack) toggleFavorite(currentTrack.id)">
+                    <i class="text-3xl" :class="(currentTrack && currentTrack.isFavorite) ? 'ph-fill ph-heart' : 'ph ph-heart'"></i>
+                </button>
+            </div>
+
+            <div class="mb-8">
+                <input type="range" min="0" max="100" step="0.1" x-model="progress" @input="seek($event.target.value)" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary outline-none">
+                <div class="flex justify-between text-xs text-slate-500 mt-2 font-medium tabular-nums">
+                    <span x-text="formatTime(currentTime)"></span>
+                    <span x-text="formatTime(duration)"></span>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between mb-8">
+                <button class="text-slate-400 p-2 focus:outline-none" :class="{'text-primary': settings.isShuffle}" @click="toggleShuffle()">
+                    <i class="ph-fill ph-shuffle text-2xl"></i>
+                </button>
+                <button @click="playPrev()" class="text-slate-800 p-2 focus:outline-none active:text-primary">
+                    <i class="ph-fill ph-skip-back-circle text-4xl"></i>
+                </button>
+                <button @click="togglePlay()" class="w-20 h-20 bg-primary text-white rounded-full flex items-center justify-center shadow-lg transform transition-transform active:scale-95 focus:outline-none">
+                    <i class="text-4xl" :class="isPlaying ? 'ph-fill ph-pause' : 'ph-fill ph-play'"></i>
+                </button>
+                <button @click="playNext()" class="text-slate-800 p-2 focus:outline-none active:text-primary">
+                    <i class="ph-fill ph-skip-forward-circle text-4xl"></i>
+                </button>
+                <button class="text-slate-400 p-2 focus:outline-none" :class="{'text-primary': settings.loopMode !== 0}" @click="toggleLoop()">
+                    <i class="text-2xl" :class="settings.loopMode === 2 ? 'ph-fill ph-repeat-once' : 'ph-fill ph-repeat'"></i>
+                </button>
+            </div>
+            
+            <div class="flex justify-between items-center px-4 bg-slate-50 rounded-2xl py-3 border border-slate-100">
+                <div class="flex flex-col items-center gap-1 text-slate-500 w-1/3">
+                    <select x-model="settings.playbackRate" @change="setPlaybackRate(settings.playbackRate)" class="bg-transparent text-sm font-medium text-center outline-none appearance-none cursor-pointer">
+                        <option value="0.5">0.5x</option>
+                        <option value="1.0">1.0x</option>
+                        <option value="1.5">1.5x</option>
+                        <option value="2.0">2.0x</option>
+                    </select>
+                    <span class="text-[10px]">速度</span>
+                </div>
+                <button @click="isPlayerOpen = false; navigate('playlists')" class="flex flex-col items-center gap-1 text-slate-500 w-1/3 border-x border-slate-200 focus:outline-none">
+                    <i class="ph ph-playlist text-xl"></i>
+                    <span class="text-[10px]">リスト</span>
+                </button>
+                <button @click="if(currentTrack) { isPlayerOpen = false; openEditPanel(currentTrack); }" class="flex flex-col items-center gap-1 text-slate-500 w-1/3 focus:outline-none">
+                    <i class="ph ph-info text-xl"></i>
+                    <span class="text-[10px]">詳細</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- UPLOAD MODAL -->
+    <div x-show="isUploadModalOpen" class="fixed inset-0 z-[120] overflow-y-auto" style="display: none;">
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+            <div x-show="isUploadModalOpen" x-transition.opacity class="fixed inset-0 transition-opacity bg-slate-900/60 backdrop-blur-sm" @click="isUploadModalOpen = false"></div>
+            <div x-show="isUploadModalOpen" 
+                 x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+                 class="relative inline-block w-full max-w-2xl p-6 overflow-hidden text-left align-middle transition-all transform bg-surface shadow-2xl rounded-2xl">
+                
+                <div class="flex justify-between items-center mb-5">
+                    <h3 class="text-xl font-bold text-slate-800">音声ファイルの追加</h3>
+                    <button @click="isUploadModalOpen = false" class="text-slate-400 hover:text-slate-600 bg-slate-100 p-1.5 rounded-full focus:outline-none">
+                        <i class="ph ph-x text-lg"></i>
+                    </button>
+                </div>
+
+                <div @dragover.prevent="dragover = true" @dragleave.prevent="dragover = false" @drop.prevent="handleDrop($event)"
+                     :class="{'border-primary bg-blue-50': dragover, 'border-slate-300 hover:bg-slate-50': !dragover}"
+                     @click="$refs.fileInput.click()"
+                     class="mt-2 border-2 border-dashed rounded-2xl p-12 text-center transition-colors cursor-pointer flex flex-col items-center justify-center group" x-data="{ dragover: false }">
+                    <input type="file" x-ref="fileInput" class="hidden" multiple accept="audio/*" @change="handleFileSelect($event)">
+                    <div class="w-16 h-16 bg-blue-50 text-primary rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                        <i class="ph ph-cloud-arrow-up text-3xl"></i>
+                    </div>
+                    <p class="text-lg font-medium text-slate-700">クリックまたはドラッグ＆ドロップ</p>
+                    <p class="text-sm text-slate-500 mt-2">対応フォーマット: MP3, WAV, M4A, OGG, AAC</p>
+                </div>
+
+                <div class="mt-6 border border-slate-200 rounded-xl overflow-hidden" x-show="uploadQueue.length > 0">
+                    <div class="bg-slate-50 px-4 py-2 border-b border-slate-200 text-xs font-semibold text-slate-500 flex justify-between">
+                        <span>アップロード状況 (<span x-text="uploadQueue.filter(q => q.status === 'done' || q.status === 'error').length"></span>/<span x-text="uploadQueue.length"></span>)</span>
+                        <button @click="uploadQueue = uploadQueue.filter(q => q.status !== 'done')" class="text-primary hover:underline">完了をクリア</button>
+                    </div>
+                    <div class="p-2 space-y-2 max-h-48 overflow-y-auto">
+                        <template x-for="item in uploadQueue" :key="item.id">
+                            <div class="flex items-center gap-3 p-2 rounded-lg relative overflow-hidden" :class="item.status === 'done' ? 'bg-green-50' : (item.status === 'error' ? 'bg-red-50' : 'bg-blue-50/50')">
+                                <div x-show="item.status === 'processing'" class="absolute bottom-0 left-0 h-1 bg-primary/20 w-full"><div class="h-full bg-primary transition-all duration-300" :style="`width: ${item.progress}%`"></div></div>
+                                <i x-show="item.status === 'done'" class="ph-fill ph-check-circle text-green-500 text-xl z-10"></i>
+                                <i x-show="item.status === 'processing' || item.status === 'pending'" class="ph ph-spinner-gap animate-spin text-primary text-xl z-10"></i>
+                                <i x-show="item.status === 'error'" class="ph-fill ph-warning-circle text-red-500 text-xl z-10"></i>
+                                
+                                <div class="flex-1 min-w-0 z-10">
+                                    <div class="text-sm font-medium text-slate-800 truncate" x-text="item.file.name"></div>
+                                    <div class="text-xs" :class="item.status === 'done' ? 'text-green-600' : (item.status === 'error' ? 'text-red-600' : 'text-primary')" x-text="item.message"></div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TRACK CONTEXT MENU -->
+    <div x-show="contextMenu.isOpen" @click.away="closeTrackMenu()" style="display: none;"
+         class="fixed z-[160] w-48 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden text-sm"
+         :style="`top: ${contextMenu.y}px; left: ${contextMenu.x}px;`">
+        <div class="p-2 space-y-1">
+            <button @click="playTrack(contextMenu.track); closeTrackMenu()" class="w-full text-left px-3 py-2 hover:bg-slate-50 rounded-lg flex items-center gap-2 text-slate-700 font-medium">
+                <i class="ph ph-play text-lg text-slate-400"></i> 再生する
+            </button>
+            <button @click="openPlaylistAddModal(contextMenu.track); closeTrackMenu()" class="w-full text-left px-3 py-2 hover:bg-slate-50 rounded-lg flex items-center gap-2 text-slate-700 font-medium">
+                <i class="ph ph-list-plus text-lg text-slate-400"></i> リストに追加
+            </button>
+            <!-- プレイリスト内でのみ表示 -->
+            <button x-show="libraryFilter.active && libraryFilter.type === 'playlist' && libraryFilter.id !== 'favorites'" @click="removeFromCurrentPlaylist(contextMenu.track.id); closeTrackMenu()" class="w-full text-left px-3 py-2 hover:bg-orange-50 text-orange-600 rounded-lg flex items-center gap-2 font-medium">
+                <i class="ph ph-minus-circle text-lg opacity-70"></i> リストから外す
+            </button>
+            <div class="h-px bg-slate-100 my-1 mx-2"></div>
+            <button @click="openEditPanel(contextMenu.track); closeTrackMenu()" class="w-full text-left px-3 py-2 hover:bg-slate-50 rounded-lg flex items-center gap-2 text-slate-700 font-medium">
+                <i class="ph ph-pencil-simple text-lg text-slate-400"></i> 情報を編集
+            </button>
+            <button @click="confirmDeleteTrack(contextMenu.track.id); closeTrackMenu()" class="w-full text-left px-3 py-2 hover:bg-red-50 text-red-600 rounded-lg flex items-center gap-2 font-medium">
+                <i class="ph ph-trash text-lg opacity-70"></i> 完全に削除
+            </button>
+        </div>
+    </div>
+
+    <!-- ADD TO PLAYLIST MODAL -->
+    <div x-show="isPlaylistModalOpen" class="fixed inset-0 z-[140] flex items-center justify-center p-4 sm:p-0" style="display: none;">
+        <div x-show="isPlaylistModalOpen" x-transition.opacity class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm" @click="isPlaylistModalOpen = false"></div>
+        <div x-show="isPlaylistModalOpen"
+             x-transition:enter="transition ease-out duration-200" x-transition:enter-start="scale-95 opacity-0" x-transition:enter-end="scale-100 opacity-100"
+             class="bg-white rounded-2xl shadow-xl w-full max-w-sm relative z-10 overflow-hidden flex flex-col max-h-[80vh]">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-bold text-slate-800">プレイリストに追加</h3>
+                <button @click="isPlaylistModalOpen = false" class="text-slate-400 hover:text-slate-600"><i class="ph ph-x"></i></button>
+            </div>
+            <div class="overflow-y-auto p-2">
+                <template x-for="pl in playlists" :key="pl.id">
+                    <button @click="toggleTrackInPlaylist(pl.id, contextMenu.track.id)" class="w-full flex items-center justify-between p-3 hover:bg-slate-50 rounded-xl transition-colors">
+                        <div class="flex items-center gap-3 text-slate-700 font-medium">
+                            <i :class="pl.id === 'favorites' ? 'ph-fill ph-heart text-red-400' : 'ph ph-playlist'"></i>
+                            <span x-text="pl.name"></span>
+                        </div>
+                        <i x-show="pl.trackIds.includes(contextMenu.track.id)" class="ph-fill ph-check-circle text-primary text-xl"></i>
+                    </button>
+                </template>
+            </div>
+            <div class="p-4 border-t border-slate-100 bg-slate-50">
+                <button @click="createNewPlaylist(); isPlaylistModalOpen = false;" class="w-full py-2 bg-white border border-slate-200 rounded-xl font-medium text-slate-700 hover:bg-slate-100 flex items-center justify-center gap-2 shadow-sm">
+                    <i class="ph ph-plus"></i> 新しいプレイリスト
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- EDIT PANEL -->
+    <div x-show="isEditPanelOpen" class="fixed inset-0 z-[130] flex justify-end" style="display: none;">
+        <div x-show="isEditPanelOpen" x-transition.opacity class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm" @click="closeEditPanel()"></div>
+        <div x-show="isEditPanelOpen" 
+             x-transition:enter="transition ease-out duration-300" x-transition:enter-start="translate-x-full" x-transition:enter-end="translate-x-0"
+             x-transition:leave="transition ease-in duration-200" x-transition:leave-start="translate-x-0" x-transition:leave-end="translate-x-full"
+             class="relative w-full max-w-md h-full bg-surface shadow-2xl flex flex-col border-l border-slate-200">
+            
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+                <h3 class="text-lg font-bold text-slate-800">音声情報の編集</h3>
+                <button @click="closeEditPanel()" class="text-slate-400 hover:text-slate-600 bg-slate-100 p-1.5 rounded-full focus:outline-none">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-6 space-y-6">
+                <div class="flex flex-col items-center">
+                    <div class="relative w-32 h-32 rounded-xl overflow-hidden bg-slate-200 shadow-sm border border-slate-200 mb-2">
+                        <img :src="editFormData.thumb || defaultThumbUrl" class="w-full h-full object-cover">
+                    </div>
+                    <p class="text-xs text-slate-400 mt-2">※カバー画像は現在ファイル内のメタデータのみ対応</p>
+                </div>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">タイトル <span class="text-red-500">*</span></label>
+                        <input type="text" x-model="editFormData.title" required class="w-full border border-slate-300 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-primary/50 outline-none bg-slate-50 focus:bg-white text-slate-900">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">アーティスト</label>
+                        <input type="text" x-model="editFormData.artist" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-primary/50 outline-none bg-slate-50 focus:bg-white text-slate-900">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">タグ (カンマ区切り)</label>
+                        <input type="text" x-model="editFormData.tagsText" placeholder="例: Podcast, Tech, 学習" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-primary/50 outline-none bg-slate-50 focus:bg-white text-slate-900">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="p-4 border-t border-slate-200 bg-slate-50 flex gap-3">
+                <button @click="closeEditPanel()" class="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 bg-white font-medium text-slate-700 hover:bg-slate-50 focus:outline-none">キャンセル</button>
+                <button @click="saveEditTrack()" class="flex-1 px-4 py-2.5 rounded-xl bg-primary hover:bg-primaryHover text-white font-medium shadow-sm focus:outline-none">保存する</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Setup LocalForage
+        localforage.config({
+            name: 'AudioLibApp',
+            storeName: 'audio_store',
+            description: 'Stores audio files and app metadata'
+        });
+
+        // Constants
+        const DB_KEY_TRACKS = 'lib_tracks';
+        const DB_KEY_SETTINGS = 'lib_settings';
+        const DB_KEY_PLAYLISTS = 'lib_playlists';
+        const DB_KEY_TAGS = 'lib_tags';
+        const DB_KEY_HISTORY = 'lib_history'; // Daily play time in seconds
+        
+        // Base64 SVG placeholder
+        const defaultThumbUrl = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MDAgNDAwIiBmaWxsPSJub25lIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgZmlsbD0iI2YxZjVmOSIvPjxwYXRoIGQ9Ik0xNTAgMjgwVjEyMGwxMDAgMjB2MTQwIiBzdHJva2U9IiM5NGEzYjgiIHN0cm9rZS13aWR0aD0iMTYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjxjaXJjbGUgY3g9IjEzMCIgY3k9IjI4MCIgcj0iMzAiIGZpbGw9IiM5NGEzYjgiLz48Y2lyY2xlIGN4PSIyMzAiIGN5PSIzMDAiIHI9IjMwIiBmaWxsPSIjOTRhM2I4Ii8+PC9zdmc+';
+
+        // Helper to generate UUID
+        const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2);
+
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('appData', () => ({
+                // UI State
+                currentPage: 'home',
+                isPlayerOpen: false,
+                isUploadModalOpen: false,
+                isEditPanelOpen: false,
+                isMobileMenuOpen: false,
+                isPlaylistModalOpen: false,
+                toasts: [],
+                uploadQueue: [],
+                chartInstances: {},
+                
+                // Context Menu
+                contextMenu: { isOpen: false, x: 0, y: 0, track: null },
+
+                // Library Filter State
+                libraryFilter: { active: false, type: null, id: null, title: '', subtitle: '' },
+                searchQuery: '',
+                sortOrder: 'newest',
+
+                // Player State
+                audio: null,
+                currentTrack: null,
+                isPlaying: false,
+                progress: 0,
+                currentTime: 0,
+                duration: 0,
+                currentObjectUrl: null,
+                playSessionTimer: null,
+                
+                // Data
+                tracks: [], // { id, title, artist, tags:[], thumb, playCount, lastPlayed, addedAt, duration }
+                playlists: [], // { id, name, trackIds: [] }
+                customTags: [], // { name, color }
+                playHistory: {}, // { "YYYY-MM-DD": seconds }
+                
+                settings: {
+                    volume: 70,
+                    isShuffle: false,
+                    loopMode: 0, // 0: off, 1: all, 2: one
+                    playbackRate: 1.0,
+                    continuousPlay: true
+                },
+
+                // Derived State
+                artists: [],
+                anniversaries: [],
+                currentAnniversaryIndex: 0,
+                anniversaryInterval: null,
+                
+                // Settings tab info
+                storageUsage: 0,
+                storageQuota: 1,
+
+                // Forms
+                editFormData: {},
+                newTagName: '',
+                newTagColor: '#3b82f6',
+
+                navItems: [
+                    { id: 'home', label: 'ホーム', icon: 'ph ph-house' },
+                    { id: 'library', label: 'ライブラリ', icon: 'ph ph-books' },
+                    { id: 'playlists', label: '再生リスト', icon: 'ph ph-playlist' },
+                    { id: 'tags', label: 'タグ管理', icon: 'ph ph-tag' },
+                    { id: 'artists', label: 'アーティスト', icon: 'ph ph-users' },
+                    { id: 'analytics', label: '再生分析', icon: 'ph ph-chart-line-up' },
+                    { id: 'settings', label: '設定', icon: 'ph ph-gear' },
+                ],
+
+                async initApp() {
+                    this.audio = new Audio();
+                    this.setupAudioListeners();
+                    await this.loadAllData();
+                    this.updateDerivedData();
+                    
+                    this.$watch('currentPage', (val) => {
+                        if(val === 'analytics') this.renderCharts();
+                        if(val === 'settings') this.updateStorageInfo();
+                        const scrollArea = document.getElementById('main-scroll-area');
+                        if(scrollArea) scrollArea.scrollTop = 0;
+                    });
+                    
+                    this.startIntervals();
+                    // Initial route check
+                    if(this.currentPage === 'settings') this.updateStorageInfo();
+                },
+
+                // --- DATA PERSISTENCE ---
+                async loadAllData() {
+                    try {
+                        const savedSettings = await localforage.getItem(DB_KEY_SETTINGS);
+                        if(savedSettings) this.settings = { ...this.settings, ...savedSettings };
+                        
+                        this.audio.volume = this.settings.volume / 100;
+                        this.audio.playbackRate = parseFloat(this.settings.playbackRate);
+
+                        this.tracks = (await localforage.getItem(DB_KEY_TRACKS)) || [];
+                        
+                        let savedPlaylists = await localforage.getItem(DB_KEY_PLAYLISTS);
+                        if(!savedPlaylists || savedPlaylists.length === 0) {
+                            // Default favorites playlist
+                            savedPlaylists = [{ id: 'favorites', name: 'お気に入り', trackIds: [] }];
+                        }
+                        // Migrate legacy favorites from tracks to playlist
+                        const favIds = this.tracks.filter(t => t.isFavorite).map(t => t.id);
+                        const favList = savedPlaylists.find(p => p.id === 'favorites');
+                        if(favList) favList.trackIds = [...new Set([...favList.trackIds, ...favIds])];
+                        this.playlists = savedPlaylists;
+
+                        this.customTags = (await localforage.getItem(DB_KEY_TAGS)) || [];
+                        this.playHistory = (await localforage.getItem(DB_KEY_HISTORY)) || {};
+                        
+                    } catch (e) {
+                        console.error("Data load error", e);
+                        this.showToast('データの読み込みに失敗しました', 'error');
+                    }
+                },
+
+                async saveTracks() {
+                    await localforage.setItem(DB_KEY_TRACKS, this.tracks);
+                    this.updateDerivedData();
+                },
+                async saveSettings() {
+                    await localforage.setItem(DB_KEY_SETTINGS, this.settings);
+                },
+                async savePlaylists() {
+                    await localforage.setItem(DB_KEY_PLAYLISTS, this.playlists);
+                },
+                async saveTags() {
+                    await localforage.setItem(DB_KEY_TAGS, this.customTags);
+                },
+                async saveHistory() {
+                    await localforage.setItem(DB_KEY_HISTORY, this.playHistory);
+                },
+
+                // --- DERIVED DATA ---
+                updateDerivedData() {
+                    // Generate Artists list
+                    const artistMap = new Map();
+                    this.tracks.forEach(t => {
+                        const aName = t.artist || 'Unknown Artist';
+                        if(aName !== 'Unknown Artist') {
+                            if(!artistMap.has(aName)) artistMap.set(aName, { name: aName, count: 0, icon: t.thumb });
+                            artistMap.get(aName).count++;
+                        }
+                    });
+                    this.artists = Array.from(artistMap.values()).sort((a, b) => b.count - a.count);
+
+                    // Sync favorites flag with playlist
+                    const favList = this.playlists.find(p => p.id === 'favorites');
+                    if(favList) {
+                        this.tracks.forEach(t => {
+                            t.isFavorite = favList.trackIds.includes(t.id);
+                        });
+                    }
+
+                    // Update Anniversaries
+                    const now = new Date();
+                    this.anniversaries = this.tracks.filter(t => {
+                        if(!t.addedAt) return false;
+                        const d = new Date(t.addedAt);
+                        return d.getMonth() === now.getMonth() && d.getDate() === now.getDate() && d.getFullYear() < now.getFullYear();
+                    }).map(t => ({
+                        ...t,
+                        years: now.getFullYear() - new Date(t.addedAt).getFullYear(),
+                        date: new Date(t.addedAt).toLocaleDateString(),
+                        isRecent: false
+                    }));
+
+                    // Fallback to recent tracks if no anniversary
+                    if (this.anniversaries.length === 0 && this.tracks.length > 0) {
+                        const recent = [...this.tracks].sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0)).slice(0, 3);
+                        this.anniversaries = recent.map(t => ({
+                            ...t, years: 0, date: new Date(t.addedAt).toLocaleDateString(), isRecent: true
+                        }));
+                    }
+                    this.currentAnniversaryIndex = 0;
+                },
+
+                get recentTracks() {
+                    return [...this.tracks].sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0)).slice(0, 4);
+                },
+
+                get sortedFilteredTracks() {
+                    let result = this.tracks;
+                    
+                    // Filter by Library context (Playlist, Artist, Tag)
+                    if (this.libraryFilter.active) {
+                        if (this.libraryFilter.type === 'playlist') {
+                            const pl = this.playlists.find(p => p.id === this.libraryFilter.id);
+                            if(pl) result = result.filter(t => pl.trackIds.includes(t.id));
+                        } else if (this.libraryFilter.type === 'artist') {
+                            result = result.filter(t => t.artist === this.libraryFilter.id);
+                        } else if (this.libraryFilter.type === 'tag') {
+                            result = result.filter(t => t.tags && t.tags.includes(this.libraryFilter.id));
+                        }
+                    }
+
+                    // Search filter
+                    if (this.searchQuery.trim() !== '') {
+                        const q = this.searchQuery.toLowerCase();
+                        result = result.filter(t => 
+                            (t.title && t.title.toLowerCase().includes(q)) || 
+                            (t.artist && t.artist.toLowerCase().includes(q)) ||
+                            (t.tags && t.tags.some(tag => tag.toLowerCase().includes(q)))
+                        );
+                    }
+
+                    // Sorting
+                    result.sort((a, b) => {
+                        switch(this.sortOrder) {
+                            case 'newest': return (b.addedAt || 0) - (a.addedAt || 0);
+                            case 'oldest': return (a.addedAt || 0) - (b.addedAt || 0);
+                            case 'titleAsc': return (a.title || '').localeCompare(b.title || '');
+                            case 'titleDesc': return (b.title || '').localeCompare(a.title || '');
+                            case 'mostPlayed': return (b.playCount || 0) - (a.playCount || 0);
+                            default: return 0;
+                        }
+                    });
+                    
+                    return result;
+                },
+
+                get totalPlayTimeHours() {
+                    const totalSec = Object.values(this.playHistory).reduce((sum, val) => sum + val, 0);
+                    return Math.floor(totalSec / 3600);
+                },
+
+                get topPlayedTracks() {
+                    return [...this.tracks].filter(t => t.playCount > 0).sort((a,b) => b.playCount - a.playCount).slice(0, 5);
+                },
+
+                // --- AUDIO PLAYER ---
+                setupAudioListeners() {
+                    this.audio.addEventListener('timeupdate', () => {
+                        this.currentTime = this.audio.currentTime;
+                        this.duration = this.audio.duration || 0;
+                        if(this.duration > 0 && !isNaN(this.duration)) {
+                            this.progress = (this.currentTime / this.duration) * 100;
+                        }
+                    });
+                    this.audio.addEventListener('ended', () => {
+                        if(this.settings.loopMode === 2) { 
+                            this.audio.currentTime = 0;
+                            this.audio.play();
+                        } else if (this.settings.continuousPlay || this.settings.loopMode === 1) {
+                            this.playNext();
+                        } else {
+                            this.isPlaying = false;
+                        }
+                    });
+                    this.audio.addEventListener('play', () => {
+                        this.isPlaying = true;
+                        this.startPlayTimer();
+                    });
+                    this.audio.addEventListener('pause', () => {
+                        this.isPlaying = false;
+                        this.stopPlayTimer();
+                    });
+                    this.audio.addEventListener('error', (e) => {
+                        console.error("Audio error", e);
+                        this.showToast('音声の再生に失敗しました', 'error');
+                        this.isPlaying = false;
+                        this.stopPlayTimer();
+                    });
+                },
+
+                async playTrack(track, forceList = null) {
+                    if(!track) return;
+                    if (this.currentTrack && this.currentTrack.id === track.id) {
+                        this.togglePlay();
+                        return;
+                    }
+                    
+                    this.stopPlayTimer();
+                    this.currentTrack = track;
+                    this.isPlaying = false;
+                    this.progress = 0;
+                    this.currentTime = 0;
+                    
+                    try {
+                        const fileBlob = await localforage.getItem('audio_' + track.id);
+                        if(fileBlob) {
+                            if(this.currentObjectUrl) URL.revokeObjectURL(this.currentObjectUrl);
+                            this.currentObjectUrl = URL.createObjectURL(fileBlob);
+                            this.audio.src = this.currentObjectUrl;
+                            this.audio.playbackRate = parseFloat(this.settings.playbackRate);
+                            await this.audio.play();
+                            
+                            // Update stats
+                            track.playCount = (track.playCount || 0) + 1;
+                            track.lastPlayed = Date.now();
+                            this.saveTracks();
+                        } else {
+                            this.showToast("ファイルが見つかりません。削除された可能性があります。", "error");
+                            this.currentTrack = null;
+                        }
+                    } catch (error) {
+                        console.error(error);
+                        this.showToast("再生エラーが発生しました。", "error");
+                    }
+                },
+                
+                togglePlay() {
+                    if(!this.currentTrack || !this.audio.src) return;
+                    if(this.audio.paused) this.audio.play().catch(e => console.error(e));
+                    else this.audio.pause();
+                },
+
+                getPlaybackList() {
+                    // Try to play from current context
+                    if (this.libraryFilter.active || this.currentPage === 'library') {
+                        return this.sortedFilteredTracks;
+                    }
+                    return this.tracks;
+                },
+                
+                playNext() {
+                    const list = this.getPlaybackList();
+                    if(list.length === 0) return;
+                    if(!this.currentTrack) {
+                        this.playTrack(list[0]);
+                        return;
+                    }
+                    
+                    let nextIndex = 0;
+                    if(this.settings.isShuffle) {
+                        nextIndex = Math.floor(Math.random() * list.length);
+                    } else {
+                        const currentIndex = list.findIndex(t => t.id === this.currentTrack.id);
+                        nextIndex = currentIndex + 1;
+                        if(nextIndex >= list.length) {
+                            if(this.settings.loopMode === 1) nextIndex = 0;
+                            else {
+                                this.audio.pause();
+                                this.isPlaying = false;
+                                return; // Stop at end of list
+                            }
+                        }
+                    }
+                    this.playTrack(list[nextIndex]);
+                },
+
+                playPrev() {
+                    if (this.audio.currentTime > 3) {
+                        this.audio.currentTime = 0;
+                        return;
+                    }
+                    const list = this.getPlaybackList();
+                    if(list.length === 0 || !this.currentTrack) return;
+
+                    const currentIndex = list.findIndex(t => t.id === this.currentTrack.id);
+                    let prevIndex = currentIndex - 1;
+                    if (prevIndex < 0) prevIndex = list.length - 1;
+                    this.playTrack(list[prevIndex]);
+                },
+
+                seek(val) {
+                    if(!this.duration) return;
+                    this.audio.currentTime = (val / 100) * this.duration;
+                },
+
+                seekByEvent(e) {
+                    if(!this.duration || !this.currentTrack) return;
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const percent = (e.clientX - rect.left) / rect.width;
+                    this.audio.currentTime = percent * this.duration;
+                },
+                
+                setVolume(val) {
+                    this.settings.volume = val;
+                    this.audio.volume = val / 100;
+                    this.saveSettings();
+                },
+
+                setPlaybackRate(val) {
+                    this.settings.playbackRate = val;
+                    this.audio.playbackRate = parseFloat(val);
+                    this.saveSettings();
+                },
+
+                toggleMute() {
+                    if(this.settings.volume > 0) {
+                        this._prevVol = this.settings.volume;
+                        this.setVolume(0);
+                    } else {
+                        this.setVolume(this._prevVol || 70);
+                    }
+                },
+
+                toggleLoop() {
+                    this.settings.loopMode = (this.settings.loopMode + 1) % 3;
+                    this.saveSettings();
+                },
+
+                toggleShuffle() {
+                    this.settings.isShuffle = !this.settings.isShuffle;
+                    this.saveSettings();
+                },
+
+                // Play time tracking for analytics
+                startPlayTimer() {
+                    if(this.playSessionTimer) clearInterval(this.playSessionTimer);
+                    this.playSessionTimer = setInterval(() => {
+                        if(this.isPlaying) {
+                            const today = new Date().toISOString().split('T')[0];
+                            this.playHistory[today] = (this.playHistory[today] || 0) + 10;
+                            // debounce save in real app, here we save every 10s of play
+                            if(Math.random() < 0.2) this.saveHistory(); 
+                        }
+                    }, 10000);
+                },
+                stopPlayTimer() {
+                    if(this.playSessionTimer) {
+                        clearInterval(this.playSessionTimer);
+                        this.saveHistory();
+                    }
+                },
+
+                // --- UPLOAD & PARSING ---
+                handleDrop(e) {
+                    this.dragover = false;
+                    if(e.dataTransfer.files.length > 0) this.processFiles(e.dataTransfer.files);
+                },
+                handleFileSelect(e) {
+                    if(e.target.files.length > 0) this.processFiles(e.target.files);
+                    e.target.value = ''; 
+                },
+                async processFiles(files) {
+                    for(let i = 0; i < files.length; i++) {
+                        const file = files[i];
+                        if(!file.type.startsWith('audio/')) {
+                            this.showToast(`${file.name}は対応していない形式です`, 'error');
+                            continue;
+                        }
+                        
+                        const queueItem = { id: Date.now() + i, file: file, status: 'processing', progress: 10, message: '解析中...' };
+                        this.uploadQueue.push(queueItem);
+                        
+                        try {
+                            const metadata = await this.readAudioTags(file);
+                            queueItem.progress = 40;
+                            
+                            // Get accurate duration
+                            const duration = await this.getAudioDuration(file);
+                            queueItem.progress = 60;
+                            
+                            const newTrackId = generateId();
+                            
+                            const newTrack = {
+                                id: newTrackId,
+                                title: metadata.title || file.name.replace(/\.[^/.]+$/, ""),
+                                artist: metadata.artist || 'Unknown Artist',
+                                tags: [],
+                                thumb: metadata.picture || null,
+                                playCount: 0,
+                                lastPlayed: null,
+                                addedAt: Date.now(),
+                                duration: duration
+                            };
+                            
+                            queueItem.message = '保存中...';
+                            await localforage.setItem('audio_' + newTrackId, file);
+                            queueItem.progress = 90;
+                            
+                            this.tracks.unshift(newTrack);
+                            await this.saveTracks();
+                            
+                            queueItem.progress = 100;
+                            queueItem.status = 'done';
+                            queueItem.message = '完了';
+                            
+                        } catch(err) {
+                            console.error(err);
+                            queueItem.status = 'error';
+                            queueItem.message = 'エラーが発生しました';
+                        }
+                    }
+                },
+                
+                getAudioDuration(file) {
+                    return new Promise((resolve) => {
+                        const objectUrl = URL.createObjectURL(file);
+                        const a = new Audio();
+                        a.onloadedmetadata = () => {
+                            resolve(a.duration);
+                            URL.revokeObjectURL(objectUrl);
+                        };
+                        a.onerror = () => { resolve(0); URL.revokeObjectURL(objectUrl); };
+                        a.src = objectUrl;
+                    });
+                },
+
+                readAudioTags(file) {
+                    return new Promise((resolve) => {
+                        if(typeof jsmediatags === 'undefined') {
+                            resolve({}); return;
+                        }
+                        jsmediatags.read(file, {
+                            onSuccess: function(tag) {
+                                let pictureUrl = null;
+                                const picture = tag.tags.picture;
+                                if (picture) {
+                                    let base64String = "";
+                                    for (let i = 0; i < picture.data.length; i++) {
+                                        base64String += String.fromCharCode(picture.data[i]);
+                                    }
+                                    const base64 = window.btoa(base64String);
+                                    pictureUrl = "data:" + picture.format + ";base64," + base64;
+                                }
+                                resolve({ title: tag.tags.title, artist: tag.tags.artist, picture: pictureUrl });
+                            },
+                            onError: function(error) {
+                                console.warn("Tags error:", error);
+                                resolve({});
+                            }
+                        });
+                    });
+                },
+
+                // --- CRUD OPERATIONS ---
+                async confirmDeleteTrack(trackId) {
+                    if(!confirm("この音声をライブラリから完全に削除してもよろしいですか？")) return;
+                    
+                    this.tracks = this.tracks.filter(t => t.id !== trackId);
+                    
+                    // Remove from playlists
+                    this.playlists.forEach(pl => {
+                        pl.trackIds = pl.trackIds.filter(id => id !== trackId);
+                    });
+                    
+                    await localforage.removeItem('audio_' + trackId);
+                    await this.saveTracks();
+                    await this.savePlaylists();
+                    
+                    if(this.currentTrack && this.currentTrack.id === trackId) {
+                        this.audio.pause();
+                        this.isPlaying = false;
+                        this.currentTrack = null;
+                        this.audio.src = '';
+                    }
+                    this.showToast('音声を削除しました');
+                },
+
+                openEditPanel(track) {
+                    this.editFormData = {
+                        id: track.id,
+                        title: track.title,
+                        artist: track.artist,
+                        thumb: track.thumb,
+                        tagsText: track.tags ? track.tags.join(', ') : ''
+                    };
+                    this.isEditPanelOpen = true;
+                },
+                
+                async saveEditTrack() {
+                    if(!this.editFormData.title.trim()) {
+                        this.showToast('タイトルを入力してください', 'error');
+                        return;
+                    }
+                    const index = this.tracks.findIndex(t => t.id === this.editFormData.id);
+                    if(index !== -1) {
+                        const parsedTags = this.editFormData.tagsText.split(',').map(t => t.trim()).filter(t => t !== '');
+                        this.tracks[index].title = this.editFormData.title;
+                        this.tracks[index].artist = this.editFormData.artist;
+                        this.tracks[index].tags = parsedTags;
+                        await this.saveTracks();
+                        
+                        // Auto-add new custom tags
+                        let tagsModified = false;
+                        parsedTags.forEach(tName => {
+                            if(!this.customTags.find(ct => ct.name === tName)) {
+                                this.customTags.push({
+                                    name: tName,
+                                    color: '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')
+                                });
+                                tagsModified = true;
+                            }
+                        });
+                        if(tagsModified) this.saveTags();
+
+                        if(this.currentTrack && this.currentTrack.id === this.editFormData.id) {
+                            this.currentTrack = this.tracks[index];
+                        }
+                        this.showToast('情報を更新しました');
+                    }
+                    this.closeEditPanel();
+                },
+
+                // --- PLAYLISTS ---
+                createNewPlaylist() {
+                    const name = prompt("新しいプレイリストの名前を入力してください");
+                    if(name && name.trim()) {
+                        const newId = generateId();
+                        this.playlists.push({ id: newId, name: name.trim(), trackIds: [] });
+                        this.savePlaylists();
+                        this.showToast(`「${name}」を作成しました`);
+                    }
+                },
+                async deletePlaylist(id) {
+                    if(id === 'favorites') return;
+                    if(confirm("このプレイリストを削除しますか？ (中の音声データは消えません)")) {
+                        this.playlists = this.playlists.filter(p => p.id !== id);
+                        await this.savePlaylists();
+                        if(this.libraryFilter.id === id) this.resetLibraryFilter();
+                    }
+                },
+                toggleFavorite(trackId) {
+                    this.toggleTrackInPlaylist('favorites', trackId);
+                    const track = this.tracks.find(t => t.id === trackId);
+                    if(track) {
+                        if(track.isFavorite) this.showToast('お気に入りに追加しました');
+                        else this.showToast('お気に入りから外しました');
+                    }
+                },
+                toggleTrackInPlaylist(playlistId, trackId) {
+                    const pl = this.playlists.find(p => p.id === playlistId);
+                    if(pl) {
+                        const idx = pl.trackIds.indexOf(trackId);
+                        if(idx > -1) pl.trackIds.splice(idx, 1);
+                        else pl.trackIds.push(trackId);
+                        this.savePlaylists();
+                        this.updateDerivedData(); // sync favorites
+                    }
+                },
+                removeFromCurrentPlaylist(trackId) {
+                    if (this.libraryFilter.type === 'playlist' && this.libraryFilter.id) {
+                        this.toggleTrackInPlaylist(this.libraryFilter.id, trackId);
+                    }
+                },
+                getPlaylistThumbs(playlistId) {
+                    const pl = this.playlists.find(p => p.id === playlistId);
+                    if(!pl || pl.trackIds.length === 0) return [];
+                    const tracks = pl.trackIds.map(tid => this.tracks.find(t => t.id === tid)).filter(Boolean);
+                    const thumbs = tracks.filter(t => t.thumb).map(t => t.thumb);
+                    return thumbs.slice(0, 4);
+                },
+                playPlaylist(playlist) {
+                    if(playlist.trackIds.length === 0) {
+                        this.showToast('プレイリストは空です', 'error'); return;
+                    }
+                    this.filterByPlaylist(playlist);
+                    // Play first track
+                    const firstTrack = this.tracks.find(t => t.id === playlist.trackIds[0]);
+                    if(firstTrack) this.playTrack(firstTrack);
+                },
+
+                // --- TAGS ---
+                addTag(name, color) {
+                    const tName = name.trim();
+                    if(!tName) return;
+                    if(this.customTags.find(t => t.name === tName)) {
+                        this.showToast('すでに同じ名前のタグがあります', 'error');
+                        return;
+                    }
+                    this.customTags.push({ name: tName, color: color });
+                    this.saveTags();
+                    this.newTagName = '';
+                },
+                async deleteTag(name) {
+                    if(confirm(`タグ「${name}」を削除しますか？ (音声のタグ付けも解除されます)`)) {
+                        this.customTags = this.customTags.filter(t => t.name !== name);
+                        this.tracks.forEach(t => {
+                            if(t.tags) t.tags = t.tags.filter(tn => tn !== name);
+                        });
+                        await this.saveTags();
+                        await this.saveTracks();
+                    }
+                },
+                getTrackCountByTag(tagName) {
+                    return this.tracks.filter(t => t.tags && t.tags.includes(tagName)).length;
+                },
+
+                // --- NAVIGATION & FILTERS ---
+                navigate(page) {
+                    this.currentPage = page;
+                    this.resetLibraryFilter();
+                },
+                filterByPlaylist(playlist) {
+                    this.libraryFilter = { active: true, type: 'playlist', id: playlist.id, title: playlist.name, subtitle: `${playlist.trackIds.length}曲` };
+                    this.currentPage = 'library';
+                },
+                filterByArtist(artistName) {
+                    this.libraryFilter = { active: true, type: 'artist', id: artistName, title: artistName, subtitle: 'アーティスト' };
+                    this.currentPage = 'library';
+                },
+                filterByTag(tagName) {
+                    this.libraryFilter = { active: true, type: 'tag', id: tagName, title: `#${tagName}`, subtitle: 'タグ' };
+                    this.currentPage = 'library';
+                },
+                resetLibraryFilter() {
+                    this.libraryFilter = { active: false, type: null, id: null, title: '', subtitle: '' };
+                    this.searchQuery = '';
+                },
+
+                // --- CONTEXT MENUS ---
+                openTrackMenu(e, track) {
+                    e.stopPropagation();
+                    this.contextMenu.track = track;
+                    this.contextMenu.x = Math.min(e.clientX, window.innerWidth - 200);
+                    this.contextMenu.y = Math.min(e.clientY, window.innerHeight - 250);
+                    this.contextMenu.isOpen = true;
+                },
+                closeTrackMenu() {
+                    this.contextMenu.isOpen = false;
+                },
+                openPlaylistAddModal(track) {
+                    this.isPlaylistModalOpen = true;
+                },
+
+                // --- UTILS ---
+                formatTime(seconds) {
+                    if(!seconds || isNaN(seconds)) return "0:00";
+                    const h = Math.floor(seconds / 3600);
+                    const m = Math.floor((seconds % 3600) / 60);
+                    const s = Math.floor(seconds % 60);
+                    if(h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                    return `${m}:${s.toString().padStart(2, '0')}`;
+                },
+                formatDate(timestamp) {
+                    if(!timestamp) return '-';
+                    return new Date(timestamp).toLocaleDateString('ja-JP');
+                },
+                formatBytes(bytes) {
+                    if(bytes === 0) return '0 Bytes';
+                    const k = 1024, dm = 2, sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+                },
+                showToast(message, type = 'success') {
+                    const id = Date.now();
+                    this.toasts.push({ id, message, type });
+                    setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 3000);
+                },
+                openFullScreenPlayer() { this.isPlayerOpen = true; },
+                openUploadModal() { this.isUploadModalOpen = true; },
+                closeEditPanel() { this.isEditPanelOpen = false; setTimeout(() => { this.editFormData = {}; }, 300); },
+                
+                handleShortcut(e) {
+                    if (e.code === 'Space' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+                        e.preventDefault();
+                        this.togglePlay();
+                    }
+                },
+                startIntervals() {
+                    this.anniversaryInterval = setInterval(() => {
+                        if(this.anniversaries.length > 1) {
+                            this.currentAnniversaryIndex = (this.currentAnniversaryIndex + 1) % this.anniversaries.length;
+                        }
+                    }, 5000);
+                },
+                resetAnniversaryInterval() {
+                    clearInterval(this.anniversaryInterval);
+                    this.startIntervals();
+                },
+
+                // --- ANALYTICS / SETTINGS ---
+                async updateStorageInfo() {
+                    if (navigator.storage && navigator.storage.estimate) {
+                        try {
+                            const estimate = await navigator.storage.estimate();
+                            this.storageUsage = estimate.usage || 0;
+                            this.storageQuota = estimate.quota || 1; // avoid / 0
+                        } catch(e) { console.warn(e); }
+                    }
+                },
+                async confirmClearData() {
+                    if(confirm("すべての設定、プレイリスト、音声データを完全に削除します。元に戻せません。実行しますか？")) {
+                        try {
+                            await localforage.clear();
+                            this.tracks = [];
+                            this.playlists = [];
+                            this.customTags = [];
+                            this.playHistory = {};
+                            if(this.audio) { this.audio.pause(); this.audio.src = ''; }
+                            this.currentTrack = null;
+                            this.isPlaying = false;
+                            this.showToast('すべてのデータを削除しました');
+                            this.loadAllData(); // Reload defaults
+                        } catch (e) {
+                            this.showToast('削除に失敗しました', 'error');
+                        }
+                    }
+                },
+                
+                renderCharts() {
+                    if(typeof Chart === 'undefined') return;
+                    setTimeout(() => {
+                        // Time Chart Data (Last 30 days)
+                        const today = new Date();
+                        const labels = [];
+                        const data = [];
+                        for(let i=29; i>=0; i--) {
+                            const d = new Date(today);
+                            d.setDate(d.getDate() - i);
+                            const dateStr = d.toISOString().split('T')[0];
+                            labels.push(`${d.getMonth()+1}/${d.getDate()}`);
+                            const seconds = this.playHistory[dateStr] || 0;
+                            data.push(parseFloat((seconds / 60).toFixed(1))); // to minutes
+                        }
+
+                        const ctxTime = document.getElementById('playTimeChart');
+                        if (ctxTime) {
+                            if(this.chartInstances.time) this.chartInstances.time.destroy();
+                            this.chartInstances.time = new Chart(ctxTime, {
+                                type: 'bar',
+                                data: {
+                                    labels: labels,
+                                    datasets: [{
+                                        label: '再生時間 (分)',
+                                        data: data,
+                                        backgroundColor: '#3b82f6',
+                                        borderRadius: 4,
+                                    }]
+                                },
+                                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+                            });
+                        }
+
+                        // Tags Chart Data
+                        const ctxTags = document.getElementById('tagsChart');
+                        if (ctxTags && this.customTags.length > 0) {
+                            if(this.chartInstances.tags) this.chartInstances.tags.destroy();
+                            const tagLabels = [];
+                            const tagData = [];
+                            const tagColors = [];
+                            this.customTags.slice(0,6).forEach(tag => {
+                                const count = this.getTrackCountByTag(tag.name);
+                                if(count > 0) {
+                                    tagLabels.push(tag.name);
+                                    tagData.push(count);
+                                    tagColors.push(tag.color);
+                                }
+                            });
+                            
+                            if(tagData.length > 0) {
+                                this.chartInstances.tags = new Chart(ctxTags, {
+                                    type: 'doughnut',
+                                    data: {
+                                        labels: tagLabels,
+                                        datasets: [{ data: tagData, backgroundColor: tagColors, borderWidth: 0 }]
+                                    },
+                                    options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'right' } } }
+                                });
+                            }
+                        }
+                    }, 100);
+                }
+            }));
+        });
+    </script>
+</body>
+</html>
