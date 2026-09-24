@@ -836,7 +836,9 @@
                 <div class="flex flex-col items-center gap-1 text-slate-500 w-1/3">
                     <select x-model="settings.playbackRate" @change="setPlaybackRate(settings.playbackRate)" class="bg-transparent text-sm font-medium text-center outline-none appearance-none cursor-pointer">
                         <option value="0.5">0.5x</option>
+                        <option value="0.75">0.75x</option>
                         <option value="1.0">1.0x</option>
+                        <option value="1.25">1.25x</option>
                         <option value="1.5">1.5x</option>
                         <option value="2.0">2.0x</option>
                     </select>
@@ -873,7 +875,7 @@
                      :class="{'border-primary bg-blue-50': dragover, 'border-slate-300 hover:bg-slate-50': !dragover}"
                      @click="$refs.fileInput.click()"
                      class="mt-2 border-2 border-dashed rounded-2xl p-12 text-center transition-colors cursor-pointer flex flex-col items-center justify-center group" x-data="{ dragover: false }">
-                    <input type="file" x-ref="fileInput" class="hidden" multiple accept="audio/*" @change="handleFileSelect($event)">
+                    <input type="file" x-ref="fileInput" class="hidden" multiple accept=".mp3,audio/mpeg,audio/*" @change="handleFileSelect($event)">
                     <div class="w-16 h-16 bg-blue-50 text-primary rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                         <i class="ph ph-cloud-arrow-up text-3xl"></i>
                     </div>
@@ -1020,6 +1022,14 @@
         const DB_KEY_PLAYLISTS = 'lib_playlists';
         const DB_KEY_TAGS = 'lib_tags';
         const DB_KEY_HISTORY = 'lib_history'; // Daily play time in seconds
+
+        // Supported audio formats. MIME type is not always populated consistently
+        // for local files, so extension fallback is intentionally supported.
+        const SUPPORTED_AUDIO_EXTENSIONS = new Set([
+            'mp3', 'wav', 'm4a', 'ogg', 'aac', 'flac', 'webm', 'oga', 'opus'
+        ]);
+        const SUPPORTED_PLAYBACK_RATES = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+        const DEFAULT_PLAYBACK_RATE = 1.0;
         
         // Base64 SVG placeholder
         const defaultThumbUrl = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MDAgNDAwIiBmaWxsPSJub25lIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgZmlsbD0iI2YxZjVmOSIvPjxwYXRoIGQ9Ik0xNTAgMjgwVjEyMGwxMDAgMjB2MTQwIiBzdHJva2U9IiM5NGEzYjgiIHN0cm9rZS13aWR0aD0iMTYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjxjaXJjbGUgY3g9IjEzMCIgY3k9IjI4MCIgcj0iMzAiIGZpbGw9IiM5NGEzYjgiLz48Y2lyY2xlIGN4PSIyMzAiIGN5PSIzMDAiIHI9IjMwIiBmaWxsPSIjOTRhM2I4Ii8+PC9zdmc+';
@@ -1068,7 +1078,7 @@
                     volume: 70,
                     isShuffle: false,
                     loopMode: 0, // 0: off, 1: all, 2: one
-                    playbackRate: 1.0,
+                    playbackRate: DEFAULT_PLAYBACK_RATE,
                     continuousPlay: true
                 },
 
@@ -1121,8 +1131,15 @@
                         const savedSettings = await localforage.getItem(DB_KEY_SETTINGS);
                         if(savedSettings) this.settings = { ...this.settings, ...savedSettings };
                         
+                        
+                        const savedPlaybackRate = Number(this.settings.playbackRate);
+                        this.settings.playbackRate = SUPPORTED_PLAYBACK_RATES.includes(savedPlaybackRate)
+                            ? savedPlaybackRate
+                            : DEFAULT_PLAYBACK_RATE;
+
                         this.audio.volume = this.settings.volume / 100;
-                        this.audio.playbackRate = parseFloat(this.settings.playbackRate);
+                        
+                        this.audio.playbackRate = this.settings.playbackRate;
 
                         this.tracks = (await localforage.getItem(DB_KEY_TRACKS)) || [];
                         
@@ -1404,8 +1421,13 @@
                 },
 
                 setPlaybackRate(val) {
-                    this.settings.playbackRate = val;
-                    this.audio.playbackRate = parseFloat(val);
+                    const requestedRate = Number(val);
+                    const playbackRate = SUPPORTED_PLAYBACK_RATES.includes(requestedRate)
+                        ? requestedRate
+                        : DEFAULT_PLAYBACK_RATE;
+
+                    this.settings.playbackRate = playbackRate;
+                    this.audio.playbackRate = playbackRate;
                     this.saveSettings();
                 },
 
@@ -1456,27 +1478,62 @@
                     if(e.target.files.length > 0) this.processFiles(e.target.files);
                     e.target.value = ''; 
                 },
+                getAudioExtension(file) {
+                    const fileName = String(file?.name || '');
+                    const lastDot = fileName.lastIndexOf('.');
+                    return lastDot >= 0 ? fileName.slice(lastDot + 1).toLowerCase() : '';
+                },
+
+                isSupportedAudioFile(file) {
+                    if(!file) return false;
+
+                    const mimeType = String(file.type || '').toLowerCase().split(';', 1)[0].trim();
+                    if(mimeType.startsWith('audio/')) return true;
+
+                    // Some browsers / OS integrations provide an empty or generic
+                    // MIME type for locally selected or dragged MP3 files.
+                    return SUPPORTED_AUDIO_EXTENSIONS.has(this.getAudioExtension(file));
+                },
+
+                normalizeAudioBlob(file) {
+                    if(this.getAudioExtension(file) === 'mp3') {
+                        // Force a reliable MIME type for browsers that cannot infer
+                        // the format from a locally supplied File/Blob.
+                        return new Blob([file], { type: 'audio/mpeg' });
+                    }
+                    return file;
+                },
+
                 async processFiles(files) {
                     for(let i = 0; i < files.length; i++) {
                         const file = files[i];
-                        if(!file.type.startsWith('audio/')) {
-                            this.showToast(`${file.name}は対応していない形式です`, 'error');
+
+                        if(!this.isSupportedAudioFile(file)) {
+                            this.showToast(`${file?.name || 'ファイル'}は対応していない形式です`, 'error');
                             continue;
                         }
-                        
-                        const queueItem = { id: Date.now() + i, file: file, status: 'processing', progress: 10, message: '解析中...' };
+
+                        const queueItem = {
+                            id: generateId(),
+                            file: file,
+                            fileName: file.name,
+                            status: 'processing',
+                            progress: 10,
+                            message: '解析中...'
+                        };
                         this.uploadQueue.push(queueItem);
-                        
+
                         try {
-                            const metadata = await this.readAudioTags(file);
+                            const audioBlob = this.normalizeAudioBlob(file);
+                            const metadata = await this.readAudioTags(audioBlob);
                             queueItem.progress = 40;
-                            
-                            // Get accurate duration
-                            const duration = await this.getAudioDuration(file);
+
+                            // Get accurate duration.
+                            const duration = await this.getAudioDuration(audioBlob);
                             queueItem.progress = 60;
-                            
+
                             const newTrackId = generateId();
-                            
+
                             const newTrack = {
                                 id: newTrackId,
                                 title: metadata.title || file.name.replace(/\.[^/.]+$/, ""),
@@ -1488,36 +1545,51 @@
                                 addedAt: Date.now(),
                                 duration: duration
                             };
-                            
+
                             queueItem.message = '保存中...';
-                            await localforage.setItem('audio_' + newTrackId, file);
+                            await localforage.setItem('audio_' + newTrackId, audioBlob);
                             queueItem.progress = 90;
-                            
+
                             this.tracks.unshift(newTrack);
                             await this.saveTracks();
-                            
+
                             queueItem.progress = 100;
                             queueItem.status = 'done';
                             queueItem.message = '完了';
-                            
+
                         } catch(err) {
-                            console.error(err);
+                            console.error('Audio import error:', err);
                             queueItem.status = 'error';
-                            queueItem.message = 'エラーが発生しました';
+                            queueItem.message = err?.message || 'エラーが発生しました';
                         }
                     }
                 },
-                
+
                 getAudioDuration(file) {
                     return new Promise((resolve) => {
                         const objectUrl = URL.createObjectURL(file);
-                        const a = new Audio();
-                        a.onloadedmetadata = () => {
-                            resolve(a.duration);
+                        const audio = new Audio();
+                        let settled = false;
+
+                        const cleanup = () => {
+                            if(settled) return;
+                            settled = true;
                             URL.revokeObjectURL(objectUrl);
+                            audio.removeAttribute('src');
+                            audio.load();
                         };
-                        a.onerror = () => { resolve(0); URL.revokeObjectURL(objectUrl); };
-                        a.src = objectUrl;
+
+                        audio.preload = 'metadata';
+                        audio.onloadedmetadata = () => {
+                            const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
+                            cleanup();
+                            resolve(duration);
+                        };
+                        audio.onerror = () => {
+                            cleanup();
+                            resolve(0);
+                        };
+                        audio.src = objectUrl;
                     });
                 },
 
