@@ -15,7 +15,7 @@ input,select{border:1px solid var(--ln);border-radius:10px;background:var(--cd);
 input[type=range]{height:120px;width:24px;padding:0;border:0;background:none;writing-mode:vertical-lr;direction:rtl;accent-color:var(--ac)}
 input[type=color]{width:36px;height:36px;padding:2px;cursor:pointer}
 :focus-visible{outline:2px solid var(--ac);outline-offset:2px}
-.hid{display:none!important}.mu{color:var(--mu)}.sm{font-size:12px}.sp{flex:1}
+.hid{display:none!important}.mu{color:var(--mu)}.sm{font-size:12px}.sp{flex:1}.psel{height:36px;min-width:66px;padding:0 9px;border-radius:10px;font-size:12px;font-weight:600}.eqctl{display:flex;align-items:center;gap:8px}.eqctl .btn{height:34px;padding:0 12px;font-size:12px}.eqdet{display:none;margin-top:10px;padding-top:8px;border-top:1px solid var(--ln)}.eqdet.on{display:block}
 .i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}.i.f{fill:currentColor}.i.s{width:14px;height:14px}
 .app{display:flex;height:100vh;height:100dvh;overflow:hidden}
 .side{width:264px;flex:none;background:var(--cd);border-right:1px solid var(--ln);display:flex;flex-direction:column;padding:18px 12px;transition:width .3s var(--ez);overflow:hidden;z-index:50}
@@ -63,18 +63,18 @@ button.tg.more{background:var(--sb);color:var(--mu)}.tg.ok{background:#E3F6EF;co
 .bd.l{background:var(--al);color:var(--ac);backdrop-filter:none}
 .dots{display:flex;gap:6px;align-items:center}.hero .dots{position:absolute;right:28px;bottom:30px;z-index:3}
 .dt{width:8px;height:8px;border-radius:99px;background:rgba(255,255,255,.5);transition:width .3s,background .3s}.dt.on{width:24px;background:#fff}.lt .dt{background:var(--ln)}.lt .dt.on{background:var(--ac)}
-.hlw{padding:24px;overflow:hidden}.stack{display:grid}.stack>.sl{grid-area:1/1}
-.hl .sl{transform:translateY(14px)}.hl .sl.on{transform:none}.hl .sl.out{transform:translateY(-14px)}
-.hc{display:grid;grid-template-columns:minmax(0,var(--hw,340px)) 1fr;gap:32px;align-items:center}
-.hx{display:flex;flex-direction:column;gap:8px;align-items:flex-start}.hx h3{font-size:clamp(24px,3vw,34px);font-weight:700;line-height:1.25}.hx .st{font-size:28px;font-weight:700;color:var(--ac)}
-.hlf{display:flex;justify-content:space-between;align-items:center;margin-top:18px}.ct{font-size:13px;color:var(--mu);font-weight:600}.hlw.big{--hw:440px;padding:32px}
+.hlw{padding:0;overflow:hidden;position:relative;min-height:340px;background:#20242B;color:#fff}.stack{display:grid;min-height:340px}.stack>.sl{grid-area:1/1}
+.hl .sl{transform:translateY(14px)}.hl .sl.on{transform:none}.hl .sl.out{transform:translateY(-14px)}.hl .hlbg{will-change:transform}.hl .hlbg::after{content:attr(data-c);position:absolute;inset:0;display:grid;place-items:center;font-size:clamp(120px,24vw,260px);font-weight:700;color:rgba(255,255,255,.18)}
+.hc{display:grid;grid-template-columns:minmax(0,var(--hw,340px)) 1fr;gap:32px;align-items:center}.hl .hc{position:relative;display:block;min-height:340px;overflow:hidden}.hl .hlbg{position:absolute;inset:-4%;background-size:cover;background-position:center;transform:scale(1.02);transition:transform .7s var(--ez)}.hl .sl.on .hlbg{transform:scale(1.06)}.hl .hc::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(12,14,24,.04) 20%,rgba(12,14,24,.24) 46%,rgba(12,14,24,.84) 100%);pointer-events:none}
+.hx{display:flex;flex-direction:column;gap:8px;align-items:flex-start}.hx h3{font-size:clamp(24px,3vw,34px);font-weight:700;line-height:1.25}.hx .st{font-size:28px;font-weight:700;color:var(--ac)}.hl .hx{position:absolute;left:32px;right:32px;bottom:48px;z-index:2;color:#fff}.hl .hx h3{color:#fff}.hl .hx .mu{color:rgba(255,255,255,.82)}.hl .hx .st{color:#fff}.hl .bd.l{background:rgba(255,255,255,.2);color:#fff;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}.hlf{position:absolute;left:28px;right:28px;bottom:20px;z-index:3;margin:0}.hl .ct{color:rgba(255,255,255,.72)}.hl .dt{background:rgba(255,255,255,.42)}.hl .dt.on{background:#fff}
+.hlf{display:flex;justify-content:space-between;align-items:center;margin-top:18px}.ct{font-size:13px;color:var(--mu);font-weight:600}.hlw.big{--hw:440px;padding:0;min-height:440px}.hlw.big .stack,.hlw.big .hc{min-height:440px}
 .row{display:flex;gap:16px;overflow-x:auto;padding:2px 2px 10px;scroll-snap-type:x proximity}
 .rc{width:172px;flex:none;scroll-snap-align:start;cursor:pointer}.rc b{display:block;margin-top:10px;font-weight:600}.rc b,.rc p{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rc p{font-size:12px;color:var(--mu)}
 .rc .th{transition:transform .25s var(--ez),box-shadow .25s}.rc:hover .th{transform:translateY(-3px);box-shadow:0 10px 24px rgba(32,36,43,.14)}
 .li{display:flex;align-items:center;gap:14px;padding:10px 14px;border-radius:14px}.li:hover{background:var(--sb)}.li .rk,.sc .rk{width:24px;text-align:center;font-weight:700;color:var(--mu)}.li>div{flex:1;min-width:0}.li b{display:block;font-weight:600}
 .dz{display:flex;align-items:center;gap:16px;padding:14px 20px;border:2px dashed #cfd3dc;background:var(--cd);transition:.2s}.dz.over{border-color:var(--ac);background:var(--al)}.dz>div{flex:1}
 .dzi{width:44px;height:44px;flex:none!important;border-radius:12px;background:var(--al);color:var(--ac);display:grid;place-items:center}
-.up{display:none;padding:16px 20px}.up.on{display:block}.uh{display:flex;justify-content:space-between;align-items:center;gap:8px}.uh span{font-weight:700;color:var(--ac)}
+.addp{display:none;overflow:hidden}.addp.on{display:block}.addph{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 20px;border-bottom:1px solid var(--ln)}.addp .dz{border:0;border-radius:0;box-shadow:none}.up{display:none;padding:16px 20px}.up.on{display:block}.uh{display:flex;justify-content:space-between;align-items:center;gap:8px}.uh span{font-weight:700;color:var(--ac)}
 .pb{height:10px;border-radius:99px;background:var(--sb);margin:10px 0 8px;overflow:hidden}.pb i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#6366F1,#8B5CF6);transition:width .3s}
 .cnt{display:flex;gap:16px;font-size:13px;font-weight:500;margin-top:10px}
 .tb{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.srch{position:relative;flex:1;min-width:220px}.srch>.i{position:absolute;left:14px;top:11px;color:var(--mu)}.srch input{width:100%;height:42px;padding-left:42px}
@@ -164,7 +164,7 @@ kbd{display:inline-flex;min-width:28px;height:26px;padding:0 8px;align-items:cen
 .nav-open .side{transform:none;box-shadow:0 0 40px rgba(0,0,0,.2)}.col .nv{justify-content:flex-start;padding:0 12px}.col .nv span,.col .brand span{display:inline}.col .gl{display:block}.col .brand{justify-content:flex-start;padding:0 10px 14px}#colb{display:none}
 .scrim{display:block;position:fixed;left:0;top:0;width:100%;height:100lvh;background:rgba(20,24,31,.4);opacity:0;pointer-events:none;transition:opacity .3s;z-index:45}.nav-open .scrim{opacity:1;pointer-events:auto}
 .menu{display:grid}.top{padding:max(10px,env(safe-area-inset-top)) 16px 4px}.top h1{font-size:22px}.scroll{padding:8px 16px 24px}
-.hc{grid-template-columns:1fr;gap:16px}.hlw,.hlw.big{--hw:100%;padding:16px}.hc .th{max-width:300px;margin:0 auto}
+.hc{grid-template-columns:1fr;gap:16px}.hlw,.hlw.big{--hw:100%;padding:0}.hl .hc,.hlw.big .stack,.hlw.big .hc{min-height:360px}.hl .hx{left:20px;right:20px;bottom:44px}.hlf{left:20px;right:20px;bottom:16px}.hc .th{max-width:300px;margin:0 auto}
 .dz{padding:12px}.dz b,.dz p,.dzi{display:none}.dz .btn{width:100%}
 .r{height:76px;grid-template-columns:24px 56px minmax(0,1fr) 36px;grid-template-areas:"c t i m" "c t a m" "c t g m";row-gap:1px;align-content:center;padding:0 12px}
 .r.hd,.c-pd{display:none}.r .th{--s:56px;grid-area:t}.chk{grid-area:c}.ti{grid-area:i}.ar{grid-area:a;font-size:12px}.r .tgs{grid-area:g}.mm{grid-area:m}.vh{display:none}
@@ -200,6 +200,8 @@ kbd{display:inline-flex;min-width:28px;height:26px;padding:0 8px;align-items:cen
 <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
 <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
 <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+<symbol id="i-back10" viewBox="0 0 24 24"><path d="M9 6H4v5"/><path d="M4 11a8 8 0 1 0 2-5"/><text x="12" y="15.2" font-size="6.8" font-weight="700" text-anchor="middle" stroke="none" fill="currentColor">10</text></symbol>
+<symbol id="i-forward10" viewBox="0 0 24 24"><path d="M15 6h5v5"/><path d="M20 11a8 8 0 1 1-2-5"/><text x="12" y="15.2" font-size="6.8" font-weight="700" text-anchor="middle" stroke="none" fill="currentColor">10</text></symbol>
 <symbol id="i-grip" viewBox="0 0 24 24"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></symbol>
 <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 16v4h16v-4"/></symbol>
 <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
@@ -233,12 +235,12 @@ kbd{display:inline-flex;min-width:28px;height:26px;padding:0 8px;align-items:cen
  </section>
 
  <section class="view lib" id="v-library">
-  <div class="dz card" id="dz"><div class="dzi" data-ic="upload"></div><div><b>音声ファイルをここにドラッグ＆ドロップ</b><p class="mu">または</p></div><button class="btn pri" data-a="up" data-ic="upload">ファイルを選択</button></div>
+  <div class="card addp" id="addp"><div class="addph"><b>音声ファイルを追加</b><button class="ib" data-a="adc" data-ic="x" aria-label="追加画面を閉じる"></button></div><div class="dz" id="dz"><div class="dzi" data-ic="upload"></div><div><b>音声ファイルをここにドラッグ＆ドロップ</b><p class="mu">または</p></div><button class="btn pri" data-a="pick" data-ic="upload">ファイルを選択</button></div></div>
   <div class="card up" id="up"></div>
   <div class="tb"><div class="srch"><svg class="i"><use href="#i-search"/></svg><input id="q" placeholder="タイトル・アーティスト・タグ・投稿日で検索" autocomplete="off"><div class="sg" id="sg"></div></div>
    <button class="btn" data-a="fb" data-ic="filter">フィルター</button><button class="btn" data-a="lsb" data-ic="sort"><span id="lst">追加日 ↓</span></button><span class="mu sm">2,400曲</span></div>
   <div class="card flt" id="flt"><div class="fgp"><span class="lb">タグ</span><div class="tgs" id="ftg"></div></div><div class="fgp"><span class="lb">アーティスト</span><select id="fa2"></select></div>
-   <div class="fgp"><span class="lb">投稿日（期間）</span><div class="two"><input type="date" aria-label="開始日"><input type="date" aria-label="終了日"></div></div><div class="fgp"><span class="lb">キー</span><select id="fk"></select></div><button class="btn" data-a="fclr">クリア</button></div>
+   <div class="fgp"><span class="lb">投稿日（期間）</span><div class="two"><input type="date" aria-label="開始日"><input type="date" aria-label="終了日"></div></div><div class="fgp"><span class="lb">プレイリスト</span><select id="fpl"></select></div><button class="btn" data-a="fclr">クリア</button></div>
   <div class="bulk" id="bk"><span><b id="bn">0</b>件を選択中</span><span class="sp"></span>
    <button class="bb" data-a="bpl" data-ic="plus">プレイリストに追加</button><button class="bb" data-a="btg" data-ic="tag">タグ編集</button><button class="bb" data-a="bar" data-ic="edit">アーティスト編集</button><button class="bb d" data-a="bdl" data-ic="trash">削除</button><button class="bb" data-a="bx" data-ic="x" aria-label="選択解除"></button></div>
   <div class="tbl" id="tbl"><div class="r hd"><button class="chk" id="all" aria-label="すべて選択"></button><span></span><span>タイトル</span><span>アーティスト</span><span>タグ</span><span class="c-pd">投稿日</span><span class="c-ad">追加日</span><span class="c-k">キー</span><span></span></div>
@@ -280,18 +282,18 @@ kbd{display:inline-flex;min-width:28px;height:26px;padding:0 8px;align-items:cen
  </div>
  <div class="pl" id="pl"><div class="mb"><i id="mbf"></i></div>
   <div class="pl-l" data-a="fp"><div id="pth"></div><div class="pt"><b id="ptt"></b><span id="pta"></span></div></div>
-  <div class="pl-c"><div class="ctl"><button class="ib x1" data-a="sh" data-ic="shuffle" aria-label="ランダム"></button><button class="ib x1" data-a="pv" data-ic="prev" aria-label="前へ"></button><button class="pp" data-a="pp" aria-label="再生／一時停止"></button><button class="ib x1" data-a="nx" data-ic="next" aria-label="次へ"></button><button class="ib x1" data-a="lp" data-ic="repeat" aria-label="ループ"></button></div>
+  <div class="pl-c"><div class="ctl"><button class="ib" data-a="bk10" data-ic="back10" aria-label="10秒戻る"></button><button class="ib x1" data-a="sh" data-ic="shuffle" aria-label="ランダム"></button><button class="ib x1" data-a="pv" data-ic="prev" aria-label="前へ"></button><button class="pp" data-a="pp" aria-label="再生／一時停止"></button><button class="ib x1" data-a="nx" data-ic="next" aria-label="次へ"></button><button class="ib" data-a="fw10" data-ic="forward10" aria-label="10秒進む"></button><button class="ib x1" data-a="lp" data-ic="repeat" aria-label="ループ"></button></div>
    <div class="sk x1"><span id="tc"></span><div class="seek" id="sk"><i id="skf"></i></div><span id="td"></span></div></div>
-  <div class="pl-r x1"><button class="chp" data-a="sp" id="spb"></button><button class="ib" data-a="q" data-ic="list" aria-label="再生キュー"></button><button class="ib" data-a="fp" data-ic="down" aria-label="フルプレイヤー" style="transform:rotate(180deg)"></button></div>
+  <div class="pl-r"><select class="psel" id="spb" aria-label="再生速度"></select><select class="psel" id="pkb" aria-label="再生キー"></select><button class="ib" data-a="q" data-ic="list" aria-label="再生キュー"></button><button class="ib" data-a="fp" data-ic="down" aria-label="フルプレイヤー" style="transform:rotate(180deg)"></button></div>
  </div>
 </div>
 </div>
 
 <div class="fp" id="fp">
- <div class="fph"><button class="ib" data-a="fx" data-ic="down" aria-label="閉じる"></button><span>再生中</span><span><button class="ib fv" data-a="fav" data-ic="star" aria-label="お気に入り"></button><button class="ib qbtn" data-a="fq" data-ic="list" aria-label="再生キュー"></button></span></div>
+ <div class="fph"><button class="ib" data-a="fx" data-ic="down" aria-label="閉じる"></button><span>再生中</span><span><button class="ib qbtn" data-a="fq" data-ic="list" aria-label="再生キュー"></button></span></div>
  <div class="fpb"><div class="aw"><div id="fart"></div><div class="fi"><b id="ft"></b><span id="fa"></span></div>
   <div class="seek" id="sk2"><i id="sk2f"></i></div><div class="tm"><span id="tc2"></span><span id="td2"></span></div>
-  <div class="ctl big"><button class="ib" data-a="sh" data-ic="shuffle" aria-label="ランダム"></button><button class="ib" data-a="pv" data-ic="prev" aria-label="前へ"></button><button class="pp" data-a="pp" aria-label="再生／一時停止"></button><button class="ib" data-a="nx" data-ic="next" aria-label="次へ"></button><button class="ib" data-a="lp" data-ic="repeat" aria-label="ループ"></button></div>
+  <div class="ctl big"><button class="ib" data-a="bk10" data-ic="back10" aria-label="10秒戻る"></button><button class="ib" data-a="sh" data-ic="shuffle" aria-label="ランダム"></button><button class="ib" data-a="pv" data-ic="prev" aria-label="前へ"></button><button class="pp" data-a="pp" aria-label="再生／一時停止"></button><button class="ib" data-a="nx" data-ic="next" aria-label="次へ"></button><button class="ib" data-a="fw10" data-ic="forward10" aria-label="10秒進む"></button><button class="ib" data-a="lp" data-ic="repeat" aria-label="ループ"></button></div>
   <div class="spd" id="spd"></div></div><div class="qv" id="qv"></div></div>
 </div>
 <div class="md" id="md"><div class="ms" id="ms"></div></div>
@@ -338,7 +340,7 @@ function cyc(el,ms){clearInterval(el._t);const sl=$$('.sl',el),ds=$$('.dt',el),c
 function mkHL(el,per,big){const m={今週:1,今月:4,今年:40}[per],sg=(lb,s,st)=>({lb,t:s.t,sub:an(s),st:st||`${s.p*m}回再生`,h:s.h,c:s.t[0]});
  const L=[sg(`${per}もっとも聴いた曲`,TOP[0]),{lb:`${per}もっとも聴いたアーティスト`,t:AR[0].n,sub:`${AR[0].c}曲を再生`,st:`${AR[0].v*m}回再生`,h:AR[0].h,c:AR[0].n[0]},{lb:`${per}もっとも聴いたタグ`,t:TG[0].t.n,sub:'タグ',st:`${TG[0].v*m}回再生`,bg:`linear-gradient(135deg,${TG[0].t.c},${TG[0].t.c}aa)`,c:TG[0].t.n[0]},sg('2位の曲',TOP[1]),sg('3位の曲',TOP[2])];
  if(big)L.push(sg('もっとも長く聴いた曲',TOP[3],`${Math.round(TOP[3].p*TOP[3].d*m/3600)}時間`),sg('最近よく聴くようになった曲',TOP[7],'+38%'),{lb:'2位のアーティスト',t:AR[1].n,sub:`${AR[1].c}曲を再生`,st:`${AR[1].v*m}回再生`,h:AR[1].h,c:AR[1].n[0]});
- el.innerHTML=`<div class="stack">${L.map((o,k)=>`<div class="sl hc${k?'':' on'}"><div class="th fl" style="--s:${big?440:340}px;background:${o.bg||g(o.h)}" data-c="${o.c}"></div><div class="hx"><span class="bd l">${o.lb}</span><h3>${o.t}</h3><p class="mu">${o.sub}</p><div class="st">${o.st}</div></div></div>`).join('')}</div><div class="hlf"><span class="ct">1 / ${L.length}</span>${dots(L.length)}</div>`;cyc(el,6500)}
+ el.innerHTML=`<div class="stack">${L.map((o,k)=>`<div class="sl hc${k?'':' on'}"><div class="hlbg" style="background:${o.bg||g(o.h)}" data-c="${o.c}"></div><div class="hx"><span class="bd l">${o.lb}</span><h3>${o.t}</h3><p class="mu">${o.sub}</p><div class="st">${o.st}</div></div></div>`).join('')}</div><div class="hlf"><span class="ct">1 / ${L.length}</span>${dots(L.length)}</div>`;cyc(el,6500)}
 function home(){const lb=a=>a.d?`${a.y}周年まであと${a.d}日`:`本日で${a.y}周年`;
  $('#hero').innerHTML=ANN.map((a,k)=>`<div class="sl${k?'':' on'}"><div class="bg" style="background:${g(a.s.h)}" data-c="${a.s.t[0]}"></div><div class="ov"><span class="bd">${lb(a)}</span><h3>${a.s.t}</h3><p>${an(a.s)}</p></div></div>`).join('')+dots(ANN.length);cyc($('#hero'),6000);
  mkHL($('#hlh'),'今週',0);mkHL($('#hlb'),'今月',1);
@@ -366,14 +368,15 @@ function del(ids){const one=ids.length===1,pls=PL.filter(p=>p.ids.some(x=>ids.in
 const cf=(t,b,ok,d)=>openM(`<h2 class="mt">${t}</h2><div class="cfb">${b}</div><div class="ft"><button class="btn" data-close>キャンセル</button><button class="btn ${d?'dg':'pri'}" data-a="mok">${ok}</button></div>`);
 const fm=(t,f,ok='保存')=>openM(`<div class="mh"><h2 class="mt">${t}</h2>${X()}</div><div class="fm">${f.map(([l,h])=>`<label>${l}${h}</label>`).join('')}</div><div class="ft"><button class="btn" data-close>キャンセル</button><button class="btn pri" data-a="mok">${ok}</button></div>`);
 /* ---- プレイリスト ---- */
-const SO=[['手動順','m',1],['追加日 ↓','ad',-1],['追加日 ↑','ad',1],['タイトル ↓','t',-1],['タイトル ↑','t',1],['投稿日 ↓','pd',-1],['投稿日 ↑','pd',1]],LS=['追加日 ↓','追加日 ↑','タイトル ↓','タイトル ↑','投稿日 ↓','投稿日 ↑'];
-let cp=0,sk='m',sd=1,plL=[];
+const SO=[['手動順','m'],['追加日','ad'],['タイトル','t'],['投稿日','pd']],LS=[['追加日','ad'],['タイトル','t'],['投稿日','pd']];
+let cp=0,sk='m',sd=1,plL=[],lsk='ad',lsd=-1;
+const sortLabel=(list,key,dir)=>{const o=list.find(x=>x[1]===key);return o?`${o[0]}${key==='m'?'':dir<0?' ↓':' ↑'}`:'手動順'};
 const mos=(p,c='')=>`<div class="mos ${c}">${p.ids.slice(0,4).map(i=>`<div style="background:${g(S[i].h)}"></div>`).join('')}</div>`;
 function closePL(){$('#pl0').classList.remove('hid');$('#pd').classList.add('hid');addl()}
 function openPL(k){cp=k;sk='m';sd=1;$('#pl0').classList.add('hid');$('#pd').classList.remove('hid');renderPL();$('#sc').scrollTop=0;addl()}
 function renderPL(){const p=PL[cp];plL=p.ids.map(i=>S[i]);if(sk!=='m')plL.sort((a,b)=>(sk==='t'?a.t.localeCompare(b.t,'ja'):a[sk]-b[sk])*sd);
- $('#pdh').innerHTML=`${mos(p,'lg')}<div><span class="bd l">プレイリスト</span><h2>${p.n}</h2><p class="mu">${p.d}</p><p class="mu">${plL.length}曲 ・ ${Math.round(plL.reduce((x,s)=>x+s.d,0)/60)}分</p><div class="acts"><button class="btn pri" data-a="plp">${I('play','f')}再生</button><button class="ib" data-a="sh" aria-label="ランダム再生">${I('shuffle')}</button><button class="ib" data-a="lp" aria-label="ループ">${I('repeat')}</button><button class="btn" data-a="pled">${I('edit')}編集</button><button class="ib" data-a="plm" aria-label="その他">${I('more')}</button></div></div>`;
- $('#psb').innerHTML=`${I('sort')}<span>${SO.find(o=>o[1]===sk&&o[2]===sd)[0]}</span>`;
+ $('#pdh').innerHTML=`${mos(p,'lg')}<div><span class="bd l">プレイリスト</span><h2>${p.n}</h2><p class="mu">${p.d}</p><p class="mu">${plL.length}曲 ・ ${Math.round(plL.reduce((x,s)=>x+s.d,0)/60)}分</p><div class="acts"><button class="btn pri" data-a="plp">${I('play','f')}再生</button><button class="ib" data-a="sh" aria-label="ランダム再生">${I('shuffle')}</button><button class="ib" data-a="lp" aria-label="ループ">${I('repeat')}</button><button class="ib" data-a="plm" aria-label="その他">${I('more')}</button></div></div>`;
+ $('#psb').innerHTML=`${I('sort')}<span>${sortLabel(SO,sk,sd)}</span>`;
  const l=$('#pll');l.dataset.m=sk==='m'?1:0;l.innerHTML=plL.map(s=>`<div class="trk" data-s="${s.i}"><button class="grip" aria-label="並べ替え">${I('grip')}</button>${th(s,48)}<div class="m"><b>${s.t}</b><p class="mu sm">${an(s)}</p></div><div class="tgs vh">${tags(s)}</div><span class="mu">${mm(s.d)}</span><button class="ib mm" aria-label="メニュー">${I('more')}</button></div>`).join('');upd()}
 function dnd(l){l.addEventListener('pointerdown',e=>{const gp=e.target.closest('.grip');if(!gp||l.dataset.m==='0')return;e.preventDefault();const it=gp.closest('.trk');let y0=e.clientY;it.classList.add('drag');
  const mv=ev=>{const put=()=>it.style.transform=`translateY(${ev.clientY-y0}px) scale(1.02)`,sw=(o,af)=>{const t0=it.getBoundingClientRect().top;af?o.after(it):o.before(it);y0+=it.getBoundingClientRect().top-t0;put()};put();
@@ -384,8 +387,8 @@ function dnd(l){l.addEventListener('pointerdown',e=>{const gp=e.target.closest('
 /* ---- 統計 ---- */
 const KP={今日:[142,18,12,7],'7日':[1560,410,96,31],'30日':[7472,2841,412,87],'3ヶ月':[21000,8100,690,140],'1年':[78000,30500,1180,320],全期間:[152000,61200,2400,590]};
 function kpis(p){const k=KP[p]||KP['30日'];$('#kp').innerHTML=[['総再生時間',`${Math.floor(k[0]/60)}<small>時間</small>${k[0]%60}<small>分</small>`],['再生回数',`${k[1].toLocaleString()}<small>回</small>`],['ユニーク曲',`${k[2].toLocaleString()}<small>曲</small>`],['ユニークアーティスト',`${k[3]}<small>人</small>`]].map(([l,v])=>`<div class="card kpi"><span>${l}</span><b>${v}</b></div>`).join('')}
-function line(){const W=600,H=180,n=30,v=i=>60+34*Math.sin(i/2.6)+(i*37%17)*1.4,d=[...Array(n)].map((_,i)=>`${(i*W/(n-1)).toFixed(1)},${(H-30-(v(i)-25)*.9).toFixed(1)}`).join(' L');
- $('#lc').innerHTML=`<defs><linearGradient id="lg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#6366F1" stop-opacity=".25"/><stop offset="1" stop-color="#6366F1" stop-opacity="0"/></linearGradient></defs>${[30,70,110,150].map(y=>`<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="#E2E5EA" vector-effect="non-scaling-stroke"/>`).join('')}<path d="M${d} L${W},${H} L0,${H}Z" fill="url(#lg)"/><path d="M${d}" fill="none" stroke="#6366F1" stroke-width="2.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`}
+function line(){const W=600,H=180,n=30,v=i=>60+34*Math.sin(i/2.6)+(i*37%17)*1.4,bw=W/n*.62;
+ $('#lc').innerHTML=`${[30,70,110,150].map(y=>`<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="#E2E5EA" vector-effect="non-scaling-stroke"/>`).join('')}${[...Array(n)].map((_,i)=>{const x=i*W/n+(W/n-bw)/2,h=Math.max(8,(v(i)-25)*1.1),y=H-h-8;return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="4" fill="#6366F1" opacity="${(.34+.66*(h/(H-8))).toFixed(2)}"/>`}).join('')}`}
 function statp(v){const bars=r=>{const m=Math.max(...r.map(x=>x[1]));return r.map(([n,val,c])=>`<div class="bar"><span>${n}</span><div class="bt"><i style="width:${val/m*100}%;${c?'background:'+c:''}"></i></div><b>${val}</b></div>`).join('')};
  const H={'曲':`<div class="g3">${TOP.slice(0,6).map((s,k)=>`<div class="card sc"><span class="rk">${k+1}</span>${th(s,64)}<div><b>${s.t}</b><p class="mu sm">${an(s)}</p><p class="pc2">${s.p}回再生</p></div></div>`).join('')}</div>`,
  'アーティスト':`<div class="card pn2">${bars(AR.map(a=>[a.n,a.v]))}</div>`,
@@ -396,31 +399,33 @@ function statp(v){const bars=r=>{const m=Math.max(...r.map(x=>x[1]));return r.ma
 /* ---- 管理・設定 ---- */
 $('#tagl').innerHTML=TAGS.map(t=>`<div class="trk tr" data-t="${t.i}"><button class="grip" aria-label="並べ替え">${I('grip')}</button><input type="color" class="cp" value="${t.c}" aria-label="色"><div class="tn"><b>${t.n}</b><p class="mu sm">${S.filter(s=>s.g.includes(t.i)).length}曲・優先度 ${t.i+1}</p></div><span class="pv vh">${chip(t)}</span><button class="ib" data-a="tm" aria-label="メニュー">${I('more')}</button></div>`).join('');
 $('#agl').innerHTML=A.map((n,k)=>`<div class="card ac2">${av(n,(k*57+230)%360,56)}<div><b>${n}</b><p class="mu sm">${S.filter(s=>s.a.includes(k)).length}曲</p></div><button class="ib" data-a="am" aria-label="編集">${I('edit')}</button></div>`).join('');
-const sr=(b,d,c)=>`<div class="sr"><div><b>${b}</b>${d?`<p class="mu sm">${d}</p>`:''}</div>${c}</div>`,sw=o=>`<button class="swt${o?' on':''}" role="switch" aria-checked="${!!o}"></button>`,sel1=o=>`<select>${o.map(x=>`<option>${x}</option>`).join('')}</select>`;
+const sr=(b,d,c)=>`<div class="sr"><div><b>${b}</b>${d?`<p class="mu sm">${d}</p>`:''}</div>${c}</div>`,sw=o=>`<button class="swt${o?' on':''}" role="switch" aria-checked="${!!o}"></button>`,sel1=(o,v)=>`<select>${o.map(x=>`<option${x===v?' selected':''}>${x}</option>`).join('')}</select>`;
 const EQ=['60','250','1k','4k','8k','16k'],PRE=[['フラット',[0,0,0,0,0,0]],['ボーカル',[-2,-1,2,4,2,0]],['低音強調',[6,4,1,0,0,0]]];
-const ST=[['s1','再生',sr('自動再生','追加後や起動時に再生を始めます',sw(0))+sr('ループ','',sw(0))+sr('シャッフル','',sw(0))+sr('再生速度','',sel1(['0.5x','0.75x','1.0x','1.25x','1.5x','2.0x']))],
-['s2','オーディオ',sr('イコライザ','',sw(1))+sr('音量補正','曲ごとの音量差をならします',sw(1))+`<div class="sr cl"><div class="chips">${PRE.map((p,k)=>`<button class="chp${k?'':' on'}" data-a="pre" data-i="${k}">${p[0]}</button>`).join('')}</div><div class="eq" id="eq">${EQ.map(f=>`<label><input type="range" min="-12" max="12" value="0" aria-label="${f}Hz"><span>${f}</span></label>`).join('')}</div></div>`],
+const ST=[['s1','再生',sr('自動再生','追加後や起動時に再生を始めます',sw(0))+sr('再生速度','',sel1(['0.5x','0.75x','1.0x','1.25x','1.5x','2.0x'],'1.0x'))],
+['s2','オーディオ',sr('イコライザ','',`<div class="eqctl">${sw(1)}<button class="btn" data-a="eqd">詳細設定</button></div>`)+sr('音量補正','曲ごとの音量差をならします',sw(1))+`<div class="eqdet on" id="eqdet"><div class="chips">${PRE.map((p,k)=>`<button class="chp${k?'':' on'}" data-a="pre" data-i="${k}">${p[0]}</button>`).join('')}</div><div class="eq" id="eq">${EQ.map(f=>`<label><input type="range" min="-12" max="12" value="0" aria-label="${f}Hz"><span>${f}</span></label>`).join('')}</div></div>`],
 ['s3','キャッシュ・データ',`<div class="sr cl">${[['音声データ','8.4 GB',84],['サムネイル','412 MB',4],['メタデータ','8 MB',2],['キャッシュ','1.2 GB',12]].map(([n,v,w])=>`<div class="bar"><span>${n}</span><div class="bt"><i style="width:${w}%"></i></div><b>${v}</b></div>`).join('')}</div>`+sr('キャッシュを削除','再生履歴と曲情報は残ります','<button class="btn" data-a="cc">キャッシュを削除</button>')+sr('すべてのローカルデータを削除','曲・プレイリスト・履歴もすべて削除されます','<button class="btn dgo" data-a="ca">すべて削除</button>')],
-['s4','表示',sr('テーマ','',`<div class="seg"><button class="on">ライト</button><button>自動</button><button>ダーク</button></div>`)+sr('アニメーション','周年やハイライトの切り替え演出',sw(1))+sr('サムネイルサイズ','',sel1(['小','中','大']))],
-['s5','アプリ',[['Space','再生／一時停止'],['←','5秒戻る'],['→','5秒進む'],['N','次へ'],['P','前へ'],['R','ループ'],['S','シャッフル']].map(([k,l])=>sr(l,'',`<kbd>${k}</kbd>`)).join('')]];
+['s4','アプリ',[['Space','再生／一時停止'],['←','5秒戻る'],['→','5秒進む'],['N','次へ'],['P','前へ'],['R','ループ'],['S','シャッフル']].map(([k,l])=>sr(l,'',`<kbd>${k}</kbd>`)).join('')]];
 $('#stg').innerHTML=ST.map(([id,t,b])=>`<div class="card sx" id="${id}"><h3>${t}</h3>${b}</div>`).join('');
 $('#sn').innerHTML=ST.map(([id,t])=>`<button data-a="scr" data-t="${id}">${t}</button>`).join('');
 const setEq=k=>{$$('.chp[data-a=pre]').forEach((b,j)=>b.classList.toggle('on',j===k));$$('#eq input').forEach((r,j)=>r.value=PRE[k][1][j])};
 /* ---- プレイヤー（再生はダミー） ---- */
 const SP=[.5,.75,1,1.25,1.5,2],sl=v=>(Number.isInteger(v)?v.toFixed(1):v)+'x';
-let spi=2,sh=false,lp=false,playing=false,t=47,base=S.slice(0,12).map(s=>s.i),order=base.slice(),pos=2;
+let spi=2,sh=false,lp=false,playing=false,t=47,base=S.slice(0,12).map(s=>s.i),order=base.slice(),pos=2,playKey=S[order[pos]].k;
 const cur=()=>S[order[pos]];
 const shuf=(b,f)=>{const r=b.filter(x=>x!==f);for(let i=r.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[r[i],r[j]]=[r[j],r[i]]}return[f,...r]};
 const reord=()=>{const id=cur().i;order=sh?shuf(base,id):base.slice();pos=order.indexOf(id)};
-function play(id,list){if(list)base=list;else if(!base.includes(id))base=[id,...base];order=sh?shuf(base,id):base.slice();pos=order.indexOf(id);t=0;playing=true;upd()}
+function play(id,list){if(list)base=list;else if(!base.includes(id))base=[id,...base];order=sh?shuf(base,id):base.slice();pos=order.indexOf(id);t=0;playKey=cur().k;playing=true;upd()}
 const tog=()=>{playing=!playing;upd()};
-function nxt(auto){if(pos+1<order.length)pos++;else if(lp||!auto)pos=0;else{playing=false;t=0;upd();return}t=0;upd()}
-function prv(){if(t>3)t=0;else pos=Math.max(0,pos-1);upd()}
+function nxt(auto){if(pos+1<order.length)pos++;else if(lp||!auto)pos=0;else{playing=false;t=0;upd();return}t=0;playKey=cur().k;upd()}
+function prv(){if(t>3)t=0;else pos=Math.max(0,pos-1);playKey=cur().k;upd()}
+const seekBy=d=>{t=Math.max(0,Math.min(cur().d,t+d));tick()};
+const setPlaySpeed=v=>{const k=SP.findIndex(x=>x===+v);if(k>=0){spi=k;upd()}};
+const setPlayKey=v=>{playKey=v;upd()};
 const qi=(s,n)=>`<div class="qi${n?' now':''}">${th(s,44)}<div><b>${s.t}</b><p class="mu sm">${an(s)}</p></div>${n?'<span class="eqa"><i></i><i></i><i></i></span>':`<span class="mu sm">${mm(s.d)}</span>`}</div>`;
 function tick(){const s=cur(),r=Math.min(100,t/s.d*100)+'%';['#skf','#sk2f','#mbf'].forEach(q=>$(q).style.width=r);$('#tc').textContent=$('#tc2').textContent=mm(t);$('#td').textContent=$('#td2').textContent=mm(s.d)}
 function upd(){const s=cur();$('#pth').innerHTML=th(s,64);$('#ptt').textContent=s.t;$('#pta').textContent=an(s);$('#fart').innerHTML=th(s,320,'fl');$('#ft').textContent=s.t;$('#fa').textContent=an(s);
  $$('[data-a=pp]').forEach(b=>b.innerHTML=I(playing?'pause':'play','f'));$$('[data-a=sh]').forEach(b=>b.classList.toggle('on',sh));$$('[data-a=lp]').forEach(b=>b.classList.toggle('on',lp));
- $('#shh').classList.toggle('on',sh);$('#spb').textContent=sl(SP[spi]);$('#spd').innerHTML=SP.map((v,k)=>`<button class="chp${k===spi?' on':''}" data-sp="${k}">${sl(v)}</button>`).join('');
+ $('#shh').classList.toggle('on',sh);$('#spb').innerHTML=SP.map((v,k)=>`<option value="${v}"${k===spi?' selected':''}>${sl(v)}</option>`).join('');$('#pkb').innerHTML=KEYS.map(k=>`<option value="${k}"${k===playKey?' selected':''}>${k}</option>`).join('');$('#spd').innerHTML=`<select class="psel" id="fpSp" aria-label="再生速度">${SP.map((v,k)=>`<option value="${v}"${k===spi?' selected':''}>${sl(v)}</option>`).join('')}</select><select class="psel" id="fpKey" aria-label="再生キー">${KEYS.map(k=>`<option value="${k}"${k===playKey?' selected':''}>${k}</option>`).join('')}</select>`;
  $('#qv').innerHTML=`<h3>再生キュー</h3>${sh?'<p class="hint on">シャッフル中：実際の再生順を表示しています。プレイリストの並び順は変わりません。</p>':''}<p class="ql">再生中</p>${qi(s,1)}<p class="ql">次に再生</p>${order.slice(pos+1,pos+8).map(id=>qi(S[id])).join('')}`;tick();
  if('mediaSession' in navigator&&typeof MediaMetadata!=='undefined'){navigator.mediaSession.metadata=new MediaMetadata({title:s.t,artist:an(s)});[['play',tog],['pause',tog],['previoustrack',prv],['nexttrack',()=>nxt()]].forEach(([a,f])=>{try{navigator.mediaSession.setActionHandler(a,f)}catch(e){}})}}
 const fp=(o,q)=>{$('#fp').classList.toggle('on',!!o);$('#fp').classList.toggle('q',!!q)};
@@ -435,15 +440,15 @@ addEventListener('hashchange',route);
 function segs(b){const gr=b.parentElement.dataset.g,k=b.dataset.k;
  if(gr==='per'){$('#cust').classList.toggle('on',k==='カスタム');kpis(k)}else if(gr==='pv')statp(k);else if(gr==='mg'){$('#tagp').classList.toggle('hid',k!=='t');$('#artp').classList.toggle('hid',k!=='a');addl()}
  else if(gr==='hp'){$('#hht').textContent=k+'のハイライト';mkHL($('#hlh'),k,0)}else if(gr==='hh')mkHL($('#hlb'),k,1)}
-function act(a,el){const m={pp:tog,nx:()=>nxt(),pv:prv,sh:()=>{sh=!sh;reord();upd()},lp:()=>{lp=!lp;upd()},sp:()=>{spi=(spi+1)%SP.length;upd()},q:()=>fp(1,1),fp:()=>fp(1),fx:()=>fp(0),fq:()=>$('#fp').classList.toggle('q'),fav:()=>el.classList.toggle('on'),
+function act(a,el){const m={pp:tog,nx:()=>nxt(),pv:prv,bk10:()=>seekBy(-10),fw10:()=>seekBy(10),sh:()=>{sh=!sh;reord();upd()},lp:()=>{lp=!lp;upd()},q:()=>fp(1,1),fp:()=>fp(1),fx:()=>fp(0),fq:()=>$('#fp').classList.toggle('q'),
  menu:()=>$('#app').classList.add('nav-open'),mx:()=>$('#app').classList.remove('nav-open'),col:()=>$('#app').classList.toggle('col'),
- up:upload,fb:()=>$('#flt').classList.toggle('on'),fclr:()=>$$('#flt .pk').forEach(b=>b.classList.remove('on')),lsb:()=>pop(el,LS.map(o=>[o]),k=>{$('#lst').textContent=LS[k]}),
+ up:toggleAdd,pick:upload,adc:()=>$('#addp').classList.remove('on'),fb:()=>$('#flt').classList.toggle('on'),fclr:()=>$$('#flt .pk').forEach(b=>b.classList.remove('on')), lsb:()=>pop(el,LS.map(o=>[o[0]+(lsk===o[1]?(lsd<0?' ↓':' ↑'):'')]),k=>{const key=LS[k][1];if(key===lsk)lsd*=-1;else{lsk=key;lsd=-1}$('#lst').textContent=sortLabel(LS,lsk,lsd)}),
  bx:()=>{sel.clear();bulk()},bpl:()=>toast('プレイリストに追加しました（仮）'),btg:()=>toast('選択した曲のタグを編集します（仮）'),bar:()=>toast('選択した曲のアーティストを編集します（仮）'),bdl:()=>del([...new Set([...sel].map(i=>i%S.length))]),
  p1:()=>play(+el.dataset.i),dok:()=>{closeM();toast('削除しました（仮）')},mok:()=>{closeM();toast('保存しました（仮）')},
  plb:closePL,plp:()=>{const l=plL.map(s=>s.i);play(l[0],l)},pled:()=>fm('プレイリストを編集',[['名前',`<input value="${PL[cp].n}">`],['説明',`<input value="${PL[cp].d}">`]]),
  plm:()=>pop(el,[['編集','edit'],['削除','trash',1]],k=>k?cf('プレイリストを削除しますか？',`<p>「${PL[cp].n}」を削除します。曲そのものはライブラリに残ります。</p>`,'削除',1):act('pled')),
- psb:()=>pop(el,SO.map(o=>[o[0]]),k=>{sk=SO[k][1];sd=SO[k][2];renderPL()}),pre:()=>setEq(+el.dataset.i),
- scr:()=>$('#'+el.dataset.t).scrollIntoView({behavior:'smooth',block:'start'}),tm:()=>pop(el,[['編集','edit'],['削除','trash',1]],()=>toast('（仮）')),am:()=>toast('アーティストを編集します（仮）'),
+ psb:()=>pop(el,SO.map(o=>[o[0]+(o[1]===sk&&o[1]!=='m'?(sd<0?' ↓':' ↑'):'')]),k=>{const key=SO[k][1];if(key==='m'){sk='m';sd=1}else if(key===sk)sd*=-1;else{sk=key;sd=-1}renderPL()}),pre:()=>setEq(+el.dataset.i),
+ scr:()=>$('#'+el.dataset.t).scrollIntoView({behavior:'smooth',block:'start'}),eqd:()=>{const swt=$('#s2 .eqctl .swt'),d=$('#eqdet');if(swt&&swt.classList.contains('on'))d.classList.toggle('on')},tm:()=>pop(el,[['編集','edit'],['削除','trash',1]],()=>toast('（仮）')),am:()=>toast('アーティストを編集します（仮）'),
  cc:()=>cf('キャッシュを削除しますか？','<p>音声のキャッシュとサムネイルの一時データを削除します。</p><p style="margin-top:8px"><b>残るデータ：</b>再生履歴・曲情報・タグ・プレイリスト</p>','キャッシュを削除'),
  ca:()=>cf('すべてのローカルデータを削除しますか？','<p>音声データ・サムネイル・メタデータ・プレイリスト・再生履歴がすべて削除されます。この操作は取り消せません。</p>','完全に削除',1)};(m[a]||(()=>{}))()}
 document.addEventListener('click',e=>{const t0=e.target,c=s=>t0.closest(s);let x;
@@ -455,25 +460,27 @@ document.addEventListener('click',e=>{const t0=e.target,c=s=>t0.closest(s);let x
  if(x=c('.seg button')){$$('button',x.parentElement).forEach(b=>b.classList.toggle('on',b===x));segs(x);return}
  if(c('#all')){const on=$('#all').classList.toggle('on');sel=on?new Set([...Array(N).keys()]):new Set();bulk();return}
  if(x=c('.chk')){const r=x.closest('.r'),i=+r.dataset.i;sel.has(i)?sel.delete(i):sel.add(i);r.classList.toggle('sel');x.classList.toggle('on');bulk();return}
- if(x=c('.mm')){const i=+x.closest('[data-s]').dataset.s;pop(x,[['再生','play'],['プレイリストに追加','plus'],['編集','edit'],['詳細','list'],['削除','trash',1]],k=>[()=>play(i),()=>toast('プレイリストに追加しました（仮）'),()=>edit(i),()=>edit(i),()=>del([i])][k]());return}
+ if(x=c('.mm')){const i=+x.closest('[data-s]').dataset.s;pop(x,[['再生','play'],['プレイリストに追加','plus'],['編集','edit'],['削除','trash',1]],k=>[()=>play(i),()=>toast('プレイリストに追加しました（仮）'),()=>edit(i),()=>del([i])][k]());return}
  if(x=c('.tg.more')){pop(x,[],null,`<div class="tgs" style="padding:8px;max-width:260px">${tags(S[+x.closest('[data-s]').dataset.s],9)}</div>`);return}
  if(x=c('.tg.pk')){x.classList.toggle('on');return}
- if(x=c('.swt')){x.classList.toggle('on');x.setAttribute('aria-checked',x.classList.contains('on'));return}
+ if(x=c('.swt')){x.classList.toggle('on');x.setAttribute('aria-checked',x.classList.contains('on'));if(x.closest('.eqctl')){$('#eqdet').classList.toggle('on',x.classList.contains('on'))}return}
  if(x=c('.rc')){play(+x.dataset.i);return}
  if(x=c('.pc')){openPL(+x.dataset.p);return}
  if(x=c('.r .ti,.r .th')){edit(+x.closest('.r').dataset.s);return}
  if(x=c('.sg button')){$('#q').value=x.lastChild.textContent;$('#sg').classList.remove('on');return}
  if(x=c('.seek')){const r=x.getBoundingClientRect();t=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))*cur().d;tick()}});
-$('#add').onclick=()=>({library:upload,playlists:()=>$('#pd').classList.contains('hid')?fm('プレイリストを作成',[['名前','<input placeholder="例：通勤用">'],['説明','<input>']],'作成'):fm('曲を追加',[['ライブラリから選択',`<select>${S.map(s=>`<option>${s.t}</option>`).join('')}</select>`]],'追加'),
+function toggleAdd(){if(cv!=='library')return;$('#addp').classList.toggle('on')}
+$('#add').onclick=()=>({library:toggleAdd,playlists:()=>$('#pd').classList.contains('hid')?fm('プレイリストを作成',[['名前','<input placeholder="例：通勤用">'],['説明','<input>']],'作成'):fm('曲を追加',[['ライブラリから選択',`<select>${S.map(s=>`<option>${s.t}</option>`).join('')}</select>`]],'追加'),
  manage:()=>$('#mg .on').dataset.k==='t'?fm('タグを追加',[['タグ名','<input placeholder="例：作業用">'],['色','<input type="color" value="#6366F1">']],'追加'):fm('アーティストを追加',[['アーティスト名','<input>'],['アイコン',`<button type="button" class="btn wf">${I('upload')}画像を選択</button>`]],'追加')})[cv]?.();
 document.addEventListener('input',e=>{const o=e.target;if(o.classList.contains('cp')){const r=o.closest('.tr'),t1=TAGS[+r.dataset.t];t1.c=o.value;$('.pv',r).innerHTML=chip(t1)}});
+document.addEventListener('change',e=>{const o=e.target;if(o.id==='spb'||o.id==='fpSp')setPlaySpeed(o.value);else if(o.id==='pkb'||o.id==='fpKey')setPlayKey(o.value)});
 $('#q').addEventListener('input',e=>{const v=e.target.value.trim().toLowerCase(),b=$('#sg');if(!v){b.classList.remove('on');return}const r=[];
  S.forEach(s=>{if(s.t.toLowerCase().includes(v))r.push(['タイトル',s.t])});A.forEach(a=>{if(a.toLowerCase().includes(v))r.push(['アーティスト',a])});TAGS.forEach(t1=>{if(t1.n.includes(v))r.push(['タグ',t1.n])});
  b.innerHTML=r.slice(0,6).map(([k,x])=>`<button><em>${k}</em><span>${x}</span></button>`).join('')||'<p class="mu">該当する項目がありません</p>';b.classList.add('on')});
 $('#vs').addEventListener('scroll',vs,{passive:true});addEventListener('resize',vs);
 ['dragenter','dragover'].forEach(n=>addEventListener(n,e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files')){e.preventDefault();$('#dz').classList.add('over')}}));
 addEventListener('dragleave',e=>{if(!e.relatedTarget)$('#dz').classList.remove('over')});
-addEventListener('drop',e=>{e.preventDefault();$('#dz').classList.remove('over');if(cv==='library')upload()});
+addEventListener('drop',e=>{const d=e.target.closest('#dz');if(!d||cv!=='library')return;e.preventDefault();d.classList.remove('over');upload()});
 addEventListener('keydown',e=>{const tg=e.target.tagName;if(e.key==='Escape'){closeM();closeP();fp(0);return}if(/INPUT|SELECT|TEXTAREA/.test(tg)||e.metaKey||e.ctrlKey||e.altKey)return;const k=e.key.toLowerCase();
  if(e.key===' '){if(tg==='BUTTON')return;e.preventDefault();tog()}else if(e.key==='ArrowRight'){t=Math.min(cur().d,t+5);tick()}else if(e.key==='ArrowLeft'){t=Math.max(0,t-5);tick()}
  else if(k==='n')nxt();else if(k==='p')prv();else if(k==='r')act('lp');else if(k==='s')act('sh')});
@@ -483,7 +490,7 @@ const NAV=[['home','ホーム','home'],['library','ライブラリ','library'],[
 $('#nav').innerHTML=NAV.map(([v,l,i],k)=>`${k===4?'<div class="gl">管理</div>':''}<button class="nv" data-v="${v}" title="${l}">${I(i)}<span>${l}</span></button>`).join('');
 $('#pgl').innerHTML=PL.map((p,k)=>`<div class="card pc" data-p="${k}">${mos(p)}<div><b>${p.n}</b><p>${p.ids.length}曲</p><p>${p.d}</p></div></div>`).join('');
 $('#ftg').innerHTML=TAGS.map(t1=>`<button class="tg pk" style="--c:${t1.c};--f:${fg(t1.c)}">${t1.n}</button>`).join('');
-$('#fa2').innerHTML='<option>すべて</option>'+A.map(a=>`<option>${a}</option>`).join('');$('#fk').innerHTML='<option>すべて</option>'+KEYS.map(k=>`<option>${k}</option>`).join('');
+$('#fa2').innerHTML='<option>すべて</option>'+A.map(a=>`<option>${a}</option>`).join('');$('#fpl').innerHTML='<option>すべて</option>'+PL.map(p=>`<option>${p.n}</option>`).join('');
 dnd($('#pll'));dnd($('#tagl'));home();kpis('30日');line();statp('曲');upd();
 if(innerWidth>=768&&innerWidth<1200)$('#app').classList.add('col');
 route();
